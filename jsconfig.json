@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@/components/*": ["./src/components/*"],
+      "@/lib/*": ["./src/lib/*"],
+      "@/context/*": ["./src/context/*"],
+      "@/app/*": ["./src/app/*"]
+    }
+  },
+  "include": ["src/**/*", ".next/types/**/*.ts", "src/middleware.js"],
+  "exclude": ["node_modules", ".next", "out"]
+}

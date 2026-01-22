@@ -1,0 +1,191 @@
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  html {
+    color-scheme: dark;
+  }
+}
+
+.ck-editor__editable {
+  min-height: 200px;
+  max-height: 500px;
+  height: 300px;
+  border-radius: 5px !important;
+}
+
+.react-datepicker-wrapper {
+  width: 100%;
+}
+
+.react-datepicker-wrapper input {
+  font-size: 15px;
+}
+
+.table {
+  font-size: 0.9rem;
+}
+
+.table thead th {
+  background-color: #f5f7fd !important;
+  font-weight: 600;
+  color: #6b7280;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+.table tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+.badge {
+  border-radius: 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.editor-container {
+  min-height: 200px;
+}
+
+.header-gradient {
+  background: linear-gradient(
+    to right,
+    #2654a1 10%,
+    #2654a1 47%,
+    #4989c2 73%,
+    #42abdc 100%
+  );
+}
+
+.editor-input {
+  outline: none;
+  min-height: 150px;
+  font-size: 1rem;
+}
+
+.editor-text-bold {
+  font-weight: bold;
+}
+
+.editor-text-italic {
+  font-style: italic;
+}
+
+.editor-text-underline {
+  text-decoration: underline;
+}
+
+.ProseMirror {
+  min-height: 250px;
+  outline: none;
+  padding: 8px;
+  font-size: 1rem;
+}
+
+.ProseMirror p {
+  margin-bottom: 8px;
+}
+
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.ProseMirror blockquote {
+  border-left: 3px solid #ccc;
+  margin: 8px 0;
+  padding-left: 10px;
+  color: #555;
+  font-style: italic;
+}
+
+.btn-light.active {
+  background-color: #d1e7fd;
+}
+
+.vr {
+  border-left: 1px solid #ddd;
+  height: 22px;
+  align-self: center;
+}
+
+.blue-element {
+  background-color: #eef2fe !important;
+}
+
+.menu-item:hover {
+  background-color: #174169;
+  transform: translateX(3px);
+}
+
+.menu-item::before {
+  transition: all 0.4s ease;
+}
+
+.notification-icon {
+  transition: transform 0.2s ease;
+}
+
+.notification-icon:hover {
+  transform: scale(1.1);
+}
+
+.menu-item {
+  position: relative;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.menu-item.active-menu::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  height: 90%;
+  width: 6px;
+  border-radius: 10px 1px 1px 10px;
+  background-color: #ffffff;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+  transition: all 0.3s ease;
+}
+
+.sidebar::-webkit-scrollbar {
+  display: none;
+}
+
+.sidebar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

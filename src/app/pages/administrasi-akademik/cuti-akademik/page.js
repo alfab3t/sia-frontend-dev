@@ -33,7 +33,6 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const router = useRouter();
   const [dataCutiAkademik, setDataCutiAkademik] = useState([]);
   const [dataRiwayat, setDataRiwayat] = useState([]);
-  const [loadingRiwayat, setLoadingRiwayat] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showRiwayat, setShowRiwayat] = useState(false);
   const [isClient, setIsClient] = useState(false);
@@ -549,8 +548,15 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       params.append('userId', userIdentifier);
     }
     
+    // Untuk prodi, tambahkan filter berdasarkan ID konsentrasi
+    if (isProdi && prodiKonsentrasi) {
+      // Coba dengan nama konsentrasi yang sudah dibersihkan
+      const cleanKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, '').trim();
+      params.append('konsentrasi', cleanKonsentrasi);
+    }
+    
     return params;
-  }, [isAdmin, isMahasiswa, userData]);
+  }, [isAdmin, isMahasiswa, userData, isProdi, prodiKonsentrasi]);
 
   const fetchRiwayatData = useCallback(async (params) => {
     const url = `${API_LINK}CutiAkademik/GetRiwayatCutiAkademik?${params}`;
@@ -775,8 +781,6 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const loadDataRiwayat = useCallback(
     async (page = 1) => {
       try {
-        setLoadingRiwayat(true);
-
         const params = buildRiwayatParams();
         const data = await fetchRiwayatData(params);
         const actualData = extractArrayData(data);
@@ -797,6 +801,16 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         );
         
         let allFormattedData = await Promise.all(formattedDataPromises);
+
+        // Filter berdasarkan konsentrasi prodi (client-side fallback)
+        if (isProdi && prodiKonsentrasi) {
+          const cleanProdiKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, '').trim();
+          allFormattedData = allFormattedData.filter(item => {
+            const itemProdi = String(item.Prodi || "").trim();
+            const cleanItemProdi = itemProdi.replace(/\s*\([^)]*\)\s*$/, '').trim();
+            return cleanItemProdi === cleanProdiKonsentrasi;
+          });
+        }
 
         allFormattedData = applySearchFilter(allFormattedData, searchRiwayat);
         allFormattedData = applyProdiFilter(allFormattedData, filterProdi);
@@ -819,8 +833,6 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         Toast.error(`Gagal memuat data riwayat: ${err.message}`);
         setDataRiwayat([]);
         setTotalDataRiwayat(0);
-      } finally {
-        setLoadingRiwayat(false);
       }
     },
     [userData, searchRiwayat, sortBy, filterProdi, isProdi, isWadir1, isFinance, isAdmin, isMahasiswa, pageSize, buildRiwayatParams, fetchRiwayatData, extractArrayData, formatRiwayatItem, applySearchFilter, applyProdiFilter, applySorting]
@@ -1582,13 +1594,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
           { label: "Administrasi Akademik" },
           { label: "Cuti Akademik" },
         ]}
-      >
-        <div className="text-center py-4">
-          <output className="spinner-border" aria-live="polite" aria-label="Loading">
-            <span className="visually-hidden">Loading...</span>
-          </output>
-        </div>
-      </MainContent>
+      />
     );
   }
 
@@ -1653,14 +1659,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
           <div></div>
         </div>
 
-        {loading ? (
-          <div className="text-center py-4">
-            <output className="spinner-border" aria-live="polite" aria-label="Loading">
-              <span className="visually-hidden">Loading...</span>
-            </output>
-            <p className="mt-2">Memuat data pengajuan...</p>
-          </div>
-        ) : (() => {
+        {(() => {
           const hasData = dataCutiAkademik.length > 0;
           
           if (hasData) {
@@ -1714,7 +1713,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
           <Formsearch
             onSearch={handleSearchRiwayat}
             onFilter={handleFilterApplyRiwayat}
-            onExport={() => {
+            onExport={async () => {
               const params = new URLSearchParams();
               if (searchRiwayat && searchRiwayat.trim() !== "") {
                 params.append('search', searchRiwayat.trim());
@@ -1726,9 +1725,39 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
                 params.append('userId', userIdentifier);
               }
               
-              const queryString = params.toString();
-              const exportUrl = `${API_LINK}CutiAkademik/riwayat/excel${queryString ? '?' + queryString : ''}`;
-              globalThis.open(exportUrl, "_blank");
+              // Untuk prodi, tambahkan filter berdasarkan konsentrasi
+              if (isProdi && prodiKonsentrasi) {
+                const cleanKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, '').trim();
+                params.append('konsentrasi', cleanKonsentrasi);
+              }
+              
+              try {
+                const queryString = params.toString();
+                const exportUrl = `${API_LINK}CutiAkademik/ExportRiwayatCutiAkademikToExcel${queryString ? '?' + queryString : ''}`;
+                
+                const response = await fetch(exportUrl, {
+                  method: 'GET',
+                  headers: getAuthHeaders()
+                });
+
+                if (!response.ok) {
+                  throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const blob = await response.blob();
+                const url = globalThis.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `Riwayat_Cuti_Akademik_${new Date().toISOString().split('T')[0]}.xlsx`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                globalThis.URL.revokeObjectURL(url);
+                
+                Toast.success("File Excel berhasil didownload!");
+              } catch (error) {
+                Toast.error(`Gagal export Excel: ${error.message}`);
+              }
             }}
             searchPlaceholder="Cari No. Pengajuan, NIM, Nama, atau Prodi"
             showAddButton={false}
@@ -1738,14 +1767,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
             filterContent={filterContentRiwayat}
           />
 
-          {loadingRiwayat ? (
-            <div className="text-center py-4">
-              <output className="spinner-border" aria-live="polite" aria-label="Loading">
-                <span className="visually-hidden">Loading...</span>
-              </output>
-              <p className="mt-2">Memuat data riwayat...</p>
-            </div>
-          ) : (() => {
+          {(() => {
             const hasRiwayatData = dataRiwayat.length > 0;
             
             if (hasRiwayatData) {
@@ -1774,7 +1796,6 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
                     <i className="fas fa-history fa-3x text-muted"></i>
                   </div>
                   <h5 className="text-muted">Tidak ada data riwayat</h5>
-                  <p className="text-muted">Belum ada riwayat cuti akademik yang tersedia.</p>
                 </div>
               );
             }

@@ -843,12 +843,20 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       modifiedBy: modifiedBy
     };
 
-    // Use the correct endpoint based on your curl command
+    // Check if this is a prodi user to use the correct endpoint
+    if (isProdi) {
+      return {
+        payload: basePayload,
+        url: `${API_LINK}CutiAkademik/GenerateIdFinalCutiAkademikByProdi`
+      };
+    }
+
+    // For non-prodi users, use the regular endpoint
     return {
       payload: basePayload,
       url: `${API_LINK}CutiAkademik/GenerateIdFinalCutiAkademik`
     };
-  }, []);
+  }, [isProdi]);
 
   const handleSubmissionError = useCallback((res, raw) => {
     

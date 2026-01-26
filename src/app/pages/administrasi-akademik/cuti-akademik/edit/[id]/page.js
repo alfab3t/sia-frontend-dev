@@ -74,7 +74,9 @@ export default function EditCutiAkademikPage() {
     mhsId: "",
     angkatan: "",
     menimbang: "",
-    tahunAjaranOptions: [], 
+    tahunAjaranOptions: [],
+    prodiNama: "",
+    mahasiswaNama: "",
   });
 
   const [errors, setErrors] = useState({});
@@ -204,6 +206,9 @@ export default function EditCutiAkademikPage() {
       lampiran: null,
       mhsId: data.mhsId || "",
       menimbang: data.menimbang || "",
+      prodiNama: data.prodiNama || data.kon_nama || data.konsentrasi || "",
+      mahasiswaNama: data.mahasiswaNama || data.mhs_nama || data.namaMahasiswa || data.mahasiswa || data.nama || "",
+      angkatan: data.angkatan || data.mhs_angkatan || "",
     }));
   };
 
@@ -474,8 +479,7 @@ export default function EditCutiAkademikPage() {
     const newErrors = {};
     
     if (isProdi) {
-      if (!formData.konId) newErrors.konId = "Program studi harus dipilih.";
-      if (!formData.mhsId) newErrors.mhsId = "Mahasiswa harus dipilih.";
+      // Untuk edit, tidak perlu validasi konId dan mhsId karena sudah ada dan disabled
       if (!formData.menimbang || formData.menimbang.trim() === "" || formData.menimbang === "<p></p>") {
         newErrors.menimbang = "Menimbang/pertimbangan wajib diisi.";
       }
@@ -483,9 +487,6 @@ export default function EditCutiAkademikPage() {
     
     if (!formData.tahunAjaran) newErrors.tahunAjaran = "Tahun akademik wajib diisi.";
     if (!formData.semester) newErrors.semester = "Semester wajib diisi.";
-    
-    // Files are optional for updates - users can edit other fields without re-uploading files
-    // The backend will keep existing files if no new files are provided
     
     setErrors(newErrors);
     
@@ -497,6 +498,59 @@ export default function EditCutiAkademikPage() {
     return true;
   };
 
+  const buildFormData = useCallback(() => {
+    const fd = new FormData();
+    fd.append("Id", realId);
+    fd.append("TahunAjaran", formData.tahunAjaran);
+    fd.append("Semester", formData.semester);
+
+    if (formData.suratPernyataan && formData.suratPernyataan instanceof File) {
+      fd.append("LampiranSuratPengajuan", formData.suratPernyataan, formData.suratPernyataan.name);
+    }
+
+    if (formData.lampiran && formData.lampiran instanceof File) {
+      fd.append("Lampiran", formData.lampiran, formData.lampiran.name);
+    }
+
+    if (isProdi) {
+      fd.append("MhsId", formData.mhsId);
+      fd.append("Menimbang", formData.menimbang);
+    }
+
+    const modifiedBy = userData?.mhsId || userData?.userid || userData?.username || userData?.nama || "SYSTEM";
+    fd.append("ModifiedBy", modifiedBy);
+
+    return fd;
+  }, [realId, formData, isProdi, userData]);
+
+  const parseErrorMessage = useCallback((res, raw) => {
+    let errorMessage = `HTTP ${res.status}: ${res.statusText}`;
+    try {
+      const errorData = JSON.parse(raw);
+      if (errorData.message) {
+        errorMessage = errorData.message;
+      } else if (errorData.error) {
+        errorMessage = errorData.error;
+      } else if (errorData.errors) {
+        const validationErrors = Object.values(errorData.errors).flat();
+        errorMessage = validationErrors.join(', ');
+      }
+    } catch {
+      errorMessage = `${errorMessage}\n\nServer response: ${raw}`;
+    }
+    return errorMessage;
+  }, []);
+
+  const handleSubmitSuccess = useCallback((result) => {
+    if (result?.message?.toLowerCase().includes("berhasil")) {
+      Toast.success("Perubahan berhasil disimpan.");
+      sessionStorage.removeItem("editCutiDraft");
+      router.push("/pages/administrasi-akademik/cuti-akademik");
+    } else {
+      Toast.error(result?.message || "Gagal menyimpan perubahan.");
+    }
+  }, [router]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
@@ -505,32 +559,10 @@ export default function EditCutiAkademikPage() {
     setSaving(true);
 
     try {
-      const fd = new FormData();
-
-      fd.append("Id", realId);
-      fd.append("TahunAjaran", formData.tahunAjaran);
-      fd.append("Semester", formData.semester);
-
-      // Send files if new ones are selected
-      if (formData.suratPernyataan && formData.suratPernyataan instanceof File) {
-        fd.append("LampiranSuratPengajuan", formData.suratPernyataan, formData.suratPernyataan.name);
-      }
-
-      if (formData.lampiran && formData.lampiran instanceof File) {
-        fd.append("Lampiran", formData.lampiran, formData.lampiran.name);
-      }
-
-      if (isProdi) {
-        fd.append("MhsId", formData.mhsId);
-        fd.append("Menimbang", formData.menimbang);
-      }
-
-      const modifiedBy = userData?.mhsId || userData?.userid || userData?.username || userData?.nama || "SYSTEM";
-      fd.append("ModifiedBy", modifiedBy);
-
+      const fd = buildFormData();
       const url = `${API_LINK}CutiAkademik/UpdateCutiAkademik/${realId}`;
-      
       const token = Cookies.get("jwtToken");
+      
       const res = await fetch(url, {
         method: "PUT",
         headers: {
@@ -542,27 +574,12 @@ export default function EditCutiAkademikPage() {
       const raw = await res.text();
       
       if (!res.ok) {
-        let errorMessage = `HTTP ${res.status}: ${res.statusText}`;
-        try {
-          const errorData = JSON.parse(raw);
-          if (errorData.message) {
-            errorMessage = errorData.message;
-          } else if (errorData.error) {
-            errorMessage = errorData.error;
-          } else if (errorData.errors) {
-            const validationErrors = Object.values(errorData.errors).flat();
-            errorMessage = validationErrors.join(', ');
-          }
-        } catch {
-          // If JSON parsing fails, use the raw response
-          errorMessage = `${errorMessage}\n\nServer response: ${raw}`;
-        }
+        const errorMessage = parseErrorMessage(res, raw);
         Toast.error(`Gagal menyimpan: ${errorMessage}`);
         return;
       }
       
       let result;
-
       try {
         result = JSON.parse(raw);
       } catch {
@@ -570,13 +587,7 @@ export default function EditCutiAkademikPage() {
         return;
       }
 
-      if (result?.message?.toLowerCase().includes("berhasil")) {
-        Toast.success("Perubahan berhasil disimpan.");
-        sessionStorage.removeItem("editCutiDraft");
-        router.push("/pages/administrasi-akademik/cuti-akademik");
-      } else {
-        Toast.error(result?.message || "Gagal menyimpan perubahan.");
-      }
+      handleSubmitSuccess(result);
     } catch (err) {
       Toast.error(err.message);
     } finally {
@@ -626,7 +637,7 @@ export default function EditCutiAkademikPage() {
                 label="Program Studi"
                 name="konId"
                 id="konId"
-                value={prodiList.find(p => p.Value === formData.konId)?.Text || ""}
+                value={formData.prodiNama || prodiList.find(p => p.Value === formData.konId)?.Text || ""}
                 onChange={() => {}}
                 disabled={true}
                 required={true}
@@ -638,7 +649,7 @@ export default function EditCutiAkademikPage() {
                 label="Mahasiswa"
                 name="mhsId"
                 id="mhsId"
-                value={studentList.find(s => s.Value === formData.mhsId)?.Text || ""}
+                value={formData.mahasiswaNama || studentList.find(s => s.Value === formData.mhsId)?.Text || ""}
                 onChange={() => {}}
                 disabled={true}
                 required={true}

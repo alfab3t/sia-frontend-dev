@@ -370,7 +370,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   }, [isAdmin]);
 
   const getProdiIcon = useCallback((status, item) => {
-    if (!status) return "⏳";
+    if (!status) return "✗";
     
     const statusLower = status.toLowerCase();
     
@@ -386,12 +386,12 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
                statusLower.includes("finance")) {
       return "✓";
     } else {
-      return "⏳";
+      return "✗";
     }
   }, []);
 
   const getWadir1Icon = useCallback((status) => {
-    if (!status) return "⏳";
+    if (!status) return "✗";
     
     const statusLower = status.toLowerCase();
     if (statusLower === "draft" || statusLower === "belum disetujui prodi") {
@@ -406,7 +406,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
                statusLower.includes("upload sk")) {
       return "✓";
     } else {
-      return "⏳";
+      return "✗";
     }
   }, []);
 
@@ -1373,12 +1373,12 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
       // Create blob and open in new tab
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = globalThis.URL.createObjectURL(blob);
       globalThis.open(url, "_blank");
       
       // Clean up after a delay to allow the tab to load
       setTimeout(() => {
-        window.URL.revokeObjectURL(url);
+        globalThis.URL.revokeObjectURL(url);
       }, 1000);
       
     } catch (error) {
@@ -1449,9 +1449,9 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const processSuccessfulResponse = useCallback(async (response, id) => {
     const contentType = response.headers.get('content-type');
     
-    if (contentType && contentType.includes('application/pdf')) {
+    if (contentType?.includes('application/pdf')) {
       await handlePdfDownload(response, id);
-    } else if (contentType && contentType.includes('application/json')) {
+    } else if (contentType?.includes('application/json')) {
       await handleJsonResponse(response);
     } else {
       Toast.error("Format response tidak dikenali.");
@@ -1584,9 +1584,9 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         ]}
       >
         <div className="text-center py-4">
-          <div className="spinner-border" role="status">
+          <output className="spinner-border" aria-live="polite" aria-label="Loading">
             <span className="visually-hidden">Loading...</span>
-          </div>
+          </output>
         </div>
       </MainContent>
     );
@@ -1655,9 +1655,9 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
         {loading ? (
           <div className="text-center py-4">
-            <div className="spinner-border" aria-live="polite" aria-label="Loading">
+            <output className="spinner-border" aria-live="polite" aria-label="Loading">
               <span className="visually-hidden">Loading...</span>
-            </div>
+            </output>
             <p className="mt-2">Memuat data pengajuan...</p>
           </div>
         ) : (() => {
@@ -1740,9 +1740,9 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
           {loadingRiwayat ? (
             <div className="text-center py-4">
-              <div className="spinner-border" aria-live="polite" aria-label="Loading">
+              <output className="spinner-border" aria-live="polite" aria-label="Loading">
                 <span className="visually-hidden">Loading...</span>
-              </div>
+              </output>
               <p className="mt-2">Memuat data riwayat...</p>
             </div>
           ) : (() => {

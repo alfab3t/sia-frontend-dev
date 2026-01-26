@@ -14,6 +14,17 @@ import { API_LINK } from "@/lib/constant";
 import { encryptIdUrl } from "@/lib/encryptor";
 import SweetAlert from "@/components/common/SweetAlert";
 import { getSSOData, getUserData } from "@/context/user";
+import Cookies from "js-cookie";
+
+// Helper function to get auth headers
+const getAuthHeaders = () => {
+  const token = Cookies.get("jwtToken");
+  return {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+};
 
 export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const ssoData = useMemo(() => getSSOData(), []);
@@ -25,10 +36,15 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const [loadingRiwayat, setLoadingRiwayat] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showRiwayat, setShowRiwayat] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   const sortRef = useRef();
   const prodiRef = useRef();
 
+  // Fix hydration mismatch
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const roleId = userData?.roleId || "";
   
@@ -85,11 +101,9 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
           return;
         }
 
-        const response = await fetch(`${API_LINK}Mahasiswa/CheckBebasTanggungan?userId=${userId}`, {
+        const response = await fetch(`${API_LINK}CutiAkademik/CheckBebasTanggungan?userId=${userId}`, {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
+          headers: getAuthHeaders()
         });
         
         if (response.ok) {
@@ -116,11 +130,9 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
           return;
         }
 
-        const response = await fetch(`${API_LINK}Mahasiswa/GetKonsentrasiList?username=${username}`, {
+        const response = await fetch(`${API_LINK}CutiAkademik/GetKonsentrasiBySekprod?username=${username}`, {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
+          headers: getAuthHeaders()
         });
         
         if (response.ok) {
@@ -245,12 +257,14 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const determineMahasiswaActions = useCallback((item, currentStatus, isDraft) => {
     const approveProdiValue = item.approveProdi || item.cak_approve_prodi || "";
     
-    if (approveProdiValue && approveProdiValue !== "" && currentStatus !== "Disetujui") {
-      return ["Detail"];
+    // If it's a draft, always allow mahasiswa to edit, delete, or submit
+    if (isDraft) {
+      return ["Detail", "Edit", "Delete", "Sent"];
     }
     
-    if (isDraft) {
-      return ["Detail", "Edit", "Delete", "Ajukan"];
+    // If already submitted and has prodi approval but not yet fully approved
+    if (approveProdiValue && approveProdiValue !== "" && currentStatus !== "Disetujui") {
+      return ["Detail"];
     }
     
     if (currentStatus === "Disetujui") {
@@ -262,7 +276,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
   const determineProdiActions = useCallback((currentStatus) => {
     if (currentStatus === "Draft") {
-      return ["Detail", "Edit", "Delete", "Ajukan"];
+      return ["Detail", "Edit", "Delete", "Sent"];
     }
     
     if (currentStatus === "Belum Disetujui Prodi") {
@@ -302,7 +316,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   }, []);
 
   const formatTableRow = useCallback((item, index, startIndex, currentStatus, actions) => {
-    const isDraft = item.status === "Draft" || item.id === "DRAFT" || !item.id?.includes("PMA");
+    const isDraft = currentStatus === "Draft";
     const noSK = item.SuratNo || item.suratNo || item.srt_no || item.cak_srt_no || "";
     
     let namaMahasiswa = item.NamaMahasiswa || item.namaMahasiswa || item.mhs_nama || item.nama_mahasiswa || "";
@@ -415,15 +429,12 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   }, [isMahasiswa, search]);
 
   const fetchMainData = useCallback(async (params) => {
-    const url = `${API_LINK}CutiAkademik?${params}`;
+    const url = `${API_LINK}CutiAkademik/GetAllCutiAkademik?${params}`;
 
     const [response] = await Promise.all([
       fetch(url, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
+        headers: getAuthHeaders()
       }),
       new Promise(resolve => setTimeout(resolve, 250))
     ]);
@@ -451,8 +462,8 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     const paginatedPendingData = pendingData.slice(startIndex, endIndex);
 
     const formattedData = paginatedPendingData.map((item, index) => {
-      const isDraft = item.status === "Draft" || item.id === "DRAFT" || !item.id?.includes("PMA");
       const currentStatus = item.status || item.cak_status || "";
+      const isDraft = currentStatus === "Draft";
       const actions = determineActions(item, currentStatus, isDraft);
 
       return formatTableRow(item, index, startIndex, currentStatus, actions);
@@ -542,15 +553,12 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   }, [isAdmin, isMahasiswa, userData]);
 
   const fetchRiwayatData = useCallback(async (params) => {
-    const url = `${API_LINK}CutiAkademik/riwayat?${params}`;
+    const url = `${API_LINK}CutiAkademik/GetRiwayatCutiAkademik?${params}`;
 
     const [response] = await Promise.all([
       fetch(url, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
+        headers: getAuthHeaders()
       }),
       new Promise(resolve => setTimeout(resolve, 250))
     ]);
@@ -622,14 +630,11 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const fetchMissingData = useCallback(async (item, namaMahasiswa, prodi) => {
     if (!namaMahasiswa || !prodi || namaMahasiswa === "" || prodi === "") {
       try {
-        const detailUrl = `${API_LINK}CutiAkademik/detail?id=${item.id || item.cak_id}`;
+        const detailUrl = `${API_LINK}CutiAkademik/GetDetailCutiAkademik?id=${item.id || item.cak_id}`;
         
         const detailResponse = await fetch(detailUrl, {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          }
+          headers: getAuthHeaders()
         });
         
         if (detailResponse.ok) {
@@ -834,23 +839,16 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
   const buildSubmissionPayload = useCallback((id, modifiedBy) => {
     const basePayload = {
-      DraftId: id,
-      ModifiedBy: modifiedBy,
-      Timestamp: Date.now()
+      draftId: id,
+      modifiedBy: modifiedBy
     };
 
-    if (isProdi) {
-      return {
-        payload: basePayload,
-        url: `${API_LINK}CutiAkademik/prodi/generate-id`
-      };
-    } else {
-      return {
-        payload: basePayload,
-        url: `${API_LINK}CutiAkademik/generate-id`
-      };
-    }
-  }, [isProdi]);
+    // Use the correct endpoint based on your curl command
+    return {
+      payload: basePayload,
+      url: `${API_LINK}CutiAkademik/GenerateIdFinalCutiAkademik`
+    };
+  }, []);
 
   const handleSubmissionError = useCallback((res, raw) => {
     
@@ -917,7 +915,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       const res = await fetch(url, {
         method: "PUT",
         headers: { 
-          "Content-Type": "application/json",
+          ...getAuthHeaders(),
           "Accept": "application/json"
         },
         body: JSON.stringify(payload),
@@ -1002,9 +1000,12 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
     try {
       
-      const url = `${API_LINK}CutiAkademik/${id}`;
+      const url = `${API_LINK}CutiAkademik/DeleteCutiAkademik/${id}`;
 
-      const res = await fetch(url, { method: "DELETE" });
+      const res = await fetch(url, { 
+        method: "DELETE",
+        headers: getAuthHeaders()
+      });
       
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: ${res.statusText}`);
@@ -1077,7 +1078,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       const res = await fetch(url, {
         method: "PUT",
         headers: { 
-          "Content-Type": "application/json",
+          ...getAuthHeaders(),
           "Accept": "application/json"
         },
         body: JSON.stringify(payload)
@@ -1202,7 +1203,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       const res = await fetch(url, {
         method: "PUT",
         headers: { 
-          "Content-Type": "application/json",
+          ...getAuthHeaders(),
           "Accept": "application/json"
         },
         body: JSON.stringify(payload)
@@ -1315,6 +1316,9 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
       const response = await fetch(`${API_LINK}CutiAkademik/upload-sk`, {
         method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${Cookies.get("jwtToken")}`
+        },
         body: formData
       });
 
@@ -1342,9 +1346,37 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     }
   };
 
-  const handlePrint = (id) => {
-    
-    globalThis.open(`${API_LINK}CutiAkademik/file/${id}`, "_blank");
+  const handlePrint = async (id) => {
+    try {
+      const token = Cookies.get("jwtToken");
+      const printUrl = `${API_LINK}CutiAkademik/DownloadFileCutiAkademik/${id}`;
+      
+      // Open in new tab with authentication
+      const response = await fetch(printUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': '*/*'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // Create blob and open in new tab
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      globalThis.open(url, "_blank");
+      
+      // Clean up after a delay to allow the tab to load
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 1000);
+      
+    } catch (error) {
+      Toast.error(`Gagal membuka file: ${error.message}`);
+    }
   };
 
   const determineDownloadRole = useCallback(() => {
@@ -1531,6 +1563,28 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     </>
   );
 
+  // Prevent hydration mismatch
+  if (!isClient) {
+    return (
+      <MainContent
+        layout="Admin"
+        loading={true}
+        title="Daftar Pengajuan Cuti Akademik"
+        breadcrumb={[
+          { label: "Sistem Informasi Akademik" },
+          { label: "Administrasi Akademik" },
+          { label: "Cuti Akademik" },
+        ]}
+      >
+        <div className="text-center py-4">
+          <div className="spinner-border" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      </MainContent>
+    );
+  }
+
   return (
     <MainContent
       layout="Admin"
@@ -1610,7 +1664,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
                   onDetail={handleDetail}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
-                  onAjukan={handleAjukan}
+                  onSent={handleAjukan}
                   onApprove={handleApprove}
                   onReject={handleReject}
                   onUpload={handleUpload}

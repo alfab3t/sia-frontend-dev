@@ -8,6 +8,17 @@ import { useRouter, useParams } from "next/navigation";
 import { API_LINK } from "@/lib/constant";
 import { decryptIdUrl, encryptIdUrl } from "@/lib/encryptor";
 import { getUserData } from "@/context/user";
+import Cookies from "js-cookie";
+
+// Helper function to get auth headers
+const getAuthHeaders = () => {
+  const token = Cookies.get("jwtToken");
+  return {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+};
 
 export default function DetailCutiAkademikPage() {
   const router = useRouter();
@@ -59,10 +70,13 @@ export default function DetailCutiAkademikPage() {
         return;
       }
 
-      const url = `${API_LINK}CutiAkademik/detail?id=${encodeURIComponent(realId)}`;
+      const url = `${API_LINK}CutiAkademik/GetDetailCutiAkademik?id=${encodeURIComponent(realId)}`;
 
       const [response] = await Promise.all([
-        fetch(url),
+        fetch(url, {
+          method: 'GET',
+          headers: getAuthHeaders()
+        }),
         new Promise(resolve => setTimeout(resolve, 300))
       ]);
 
@@ -110,21 +124,47 @@ export default function DetailCutiAkademikPage() {
     }
   };
 
-  const handleDownload = (fileName) => {
-  if (!fileName) {
-    Toast.error("File tidak ditemukan.");
-    return;
-  }
+  const handleDownload = async (fileName) => {
+    if (!fileName) {
+      Toast.error("File tidak ditemukan.");
+      return;
+    }
 
-  const downloadUrl = `${API_LINK}CutiAkademik/file/${fileName}`;
+    try {
+      const token = Cookies.get("jwtToken");
+      const downloadUrl = `${API_LINK}CutiAkademik/DownloadFileCutiAkademik/${fileName}`;
 
-  const link = document.createElement("a");
-  link.href = downloadUrl;
-  link.setAttribute("download", fileName);
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-};
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': '*/*'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // Create blob from response
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create download link
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      // Clean up
+      window.URL.revokeObjectURL(url);
+      
+    } catch (error) {
+      Toast.error(`Gagal mendownload file: ${error.message}`);
+    }
+  };
 
   if (loading) {
     return (
@@ -190,7 +230,7 @@ export default function DetailCutiAkademikPage() {
 
         <div className="row">
           <div className="col-lg-6 mb-3">
-            <h6 className="fw-semibold mb-1">Nomor SK</h6>
+            <h6 className="fw-semibold mb-1">Nomor Pengajuan</h6>
             <p>{detail?.id || "-"}</p>
           </div>
 

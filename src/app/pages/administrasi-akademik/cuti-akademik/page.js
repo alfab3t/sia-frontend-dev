@@ -1062,11 +1062,11 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       if (isProdi) {
         const menimbang = "Pengajuan cuti akademik telah memenuhi persyaratan dan disetujui oleh program studi.";
         
-        url = `${API_LINK}CutiAkademik/approve/prodi`;
+        url = `${API_LINK}CutiAkademik/ApproveCutiAkademikByProdi`;
         payload = {
-          Id: itemId,
-          Menimbang: menimbang,
-          ApprovedBy: approvedBy
+          id: itemId,
+          menimbang: menimbang,
+          approvedBy: approvedBy
         };
         
       } else if (isFinance || isWadir1) {

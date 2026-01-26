@@ -12,6 +12,16 @@ import { useRouter, useParams } from "next/navigation";
 import { API_LINK } from "@/lib/constant";
 import { decryptIdUrl } from "@/lib/encryptor";
 import { getUserData } from "@/context/user";
+import Cookies from "js-cookie";
+
+// Helper function to get auth headers
+const getAuthHeaders = () => {
+  const token = Cookies.get("jwtToken");
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+};
 
 const Editor = dynamic(() => import("@/components/common/Editor"), {
   ssr: false,
@@ -24,11 +34,17 @@ export default function EditCutiAkademikPage() {
   const router = useRouter();
   const params = useParams();
   const userData = useMemo(() => getUserData(), []);
+  const [isClient, setIsClient] = useState(false);
 
   const roleId = userData?.roleId || "";
   
   const isProdi = roleId === "ROL71";
   const isMahasiswa = roleId === "ROL23";
+
+  // Fix hydration mismatch
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   
   const realId = useMemo(() => {
@@ -72,11 +88,9 @@ export default function EditCutiAkademikPage() {
     
     const loadProdi = async () => {
       try {
-        const response = await fetch(`${API_LINK}Mahasiswa/GetKonsentrasiList?username=${username}`, {
+        const response = await fetch(`${API_LINK}CutiAkademik/GetKonsentrasiBySekprod?username=${username}`, {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
+          headers: getAuthHeaders()
         });
         
         if (response.ok) {
@@ -161,8 +175,11 @@ export default function EditCutiAkademikPage() {
 
   
   const fetchDetailData = async (realId) => {
-    const url = `${API_LINK}CutiAkademik/detail?id=${encodeURIComponent(realId)}`;
-    const res = await fetch(url);
+    const url = `${API_LINK}CutiAkademik/GetDetailCutiAkademik?id=${encodeURIComponent(realId)}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
     const raw = await res.text();
 
     let data;
@@ -191,7 +208,10 @@ export default function EditCutiAkademikPage() {
   };
 
   const fetchUserKonsentrasiList = async (username) => {
-    const konsentrasiResponse = await fetch(`${API_LINK}Mahasiswa/GetKonsentrasiList?username=${username}`);
+    const konsentrasiResponse = await fetch(`${API_LINK}CutiAkademik/GetKonsentrasiBySekprod?username=${username}`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
     if (!konsentrasiResponse.ok) {
       return [];
     }
@@ -199,7 +219,10 @@ export default function EditCutiAkademikPage() {
   };
 
   const fetchStudentsForKonsentrasi = async (konsentrasiId) => {
-    const studentsResponse = await fetch(`${API_LINK}Mahasiswa/GetByKonsentrasi?konId=${konsentrasiId}`);
+    const studentsResponse = await fetch(`${API_LINK}CutiAkademik/GetMahasiswaByKonsentrasi?username=${username}`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
     if (!studentsResponse.ok) {
       return [];
     }
@@ -230,7 +253,10 @@ export default function EditCutiAkademikPage() {
 
   const fetchStudentDetailAndGenerateOptions = async (mhsId) => {
     try {
-      const detailResponse = await fetch(`${API_LINK}Mahasiswa/GetDetail?mhsId=${mhsId}`);
+      const detailResponse = await fetch(`${API_LINK}CutiAkademik/GetDetailMahasiswa?mahasiswaId=${mhsId}`, {
+        method: 'GET',
+        headers: getAuthHeaders()
+      });
       if (!detailResponse.ok) {
         return null;
       }
@@ -342,11 +368,9 @@ export default function EditCutiAkademikPage() {
           return;
         }
 
-        const response = await fetch(`${API_LINK}Mahasiswa/GetDetail?mhsId=${mhsId}`, {
+        const response = await fetch(`${API_LINK}CutiAkademik/GetDetailMahasiswa?mahasiswaId=${mhsId}`, {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
+          headers: getAuthHeaders()
         });
         
         if (response.ok) {
@@ -460,6 +484,9 @@ export default function EditCutiAkademikPage() {
     if (!formData.tahunAjaran) newErrors.tahunAjaran = "Tahun akademik wajib diisi.";
     if (!formData.semester) newErrors.semester = "Semester wajib diisi.";
     
+    // Files are optional for updates - users can edit other fields without re-uploading files
+    // The backend will keep existing files if no new files are provided
+    
     setErrors(newErrors);
     
     if (Object.keys(newErrors).length > 0) {
@@ -480,9 +507,11 @@ export default function EditCutiAkademikPage() {
     try {
       const fd = new FormData();
 
+      fd.append("Id", realId);
       fd.append("TahunAjaran", formData.tahunAjaran);
       fd.append("Semester", formData.semester);
 
+      // Send files if new ones are selected
       if (formData.suratPernyataan && formData.suratPernyataan instanceof File) {
         fd.append("LampiranSuratPengajuan", formData.suratPernyataan, formData.suratPernyataan.name);
       }
@@ -496,19 +525,41 @@ export default function EditCutiAkademikPage() {
         fd.append("Menimbang", formData.menimbang);
       }
 
-      fd.append(
-        "ModifiedBy",
-        userData?.mhsId || userData?.nama || userData?.userid || userData?.username || "SYSTEM"
-      );
+      const modifiedBy = userData?.mhsId || userData?.userid || userData?.username || userData?.nama || "SYSTEM";
+      fd.append("ModifiedBy", modifiedBy);
 
-      const url = `${API_LINK}CutiAkademik/${realId}`;
+      const url = `${API_LINK}CutiAkademik/UpdateCutiAkademik/${realId}`;
       
+      const token = Cookies.get("jwtToken");
       const res = await fetch(url, {
         method: "PUT",
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        },
         body: fd,
       });
 
       const raw = await res.text();
+      
+      if (!res.ok) {
+        let errorMessage = `HTTP ${res.status}: ${res.statusText}`;
+        try {
+          const errorData = JSON.parse(raw);
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          } else if (errorData.errors) {
+            const validationErrors = Object.values(errorData.errors).flat();
+            errorMessage = validationErrors.join(', ');
+          }
+        } catch {
+          // If JSON parsing fails, use the raw response
+          errorMessage = `${errorMessage}\n\nServer response: ${raw}`;
+        }
+        Toast.error(`Gagal menyimpan: ${errorMessage}`);
+        return;
+      }
       
       let result;
 
@@ -536,12 +587,14 @@ export default function EditCutiAkademikPage() {
   const handleCancel = () => router.back();
 
   const getPageTitle = () => {
+    if (!isClient) return "Edit Pengajuan Cuti Akademik";
     if (isProdi) return "Edit Pengajuan Cuti Akademik (Prodi)";
     if (isMahasiswa) return "Edit Pengajuan Cuti Akademik (Mahasiswa)";
     return "Edit Pengajuan Cuti Akademik";
   };
 
   const getBreadcrumbLabel = () => {
+    if (!isClient) return "Edit Pengajuan";
     if (isProdi) return "Edit Pengajuan (Prodi)";
     if (isMahasiswa) return "Edit Pengajuan (Mahasiswa)";
     return "Edit Pengajuan";
@@ -566,7 +619,7 @@ export default function EditCutiAkademikPage() {
       ]}
     >
       <form onSubmit={handleSubmit}>
-        {isProdi && (
+        {isClient && isProdi && (
           <div className="row mt-3">
             <div className="col-lg-4">
               <Input
@@ -608,7 +661,7 @@ export default function EditCutiAkademikPage() {
 
         <div className="row mt-3">
           <div className="col-lg-6">
-            {(isProdi || isMahasiswa) ? (
+            {isClient && (isProdi || isMahasiswa) ? (
               <DropDown
                 ref={tahunAjaranRef}
                 forInput="tahunAjaran"
@@ -643,13 +696,13 @@ export default function EditCutiAkademikPage() {
                 )}
               </>
             )}
-            {isMahasiswa && !formData.angkatan && (
+            {isClient && isMahasiswa && !formData.angkatan && (
               <small className="text-muted">Memuat opsi tahun akademik...</small>
             )}
           </div>
 
           <div className="col-lg-6">
-            {(isProdi || isMahasiswa) ? (
+            {isClient && (isProdi || isMahasiswa) ? (
               <DropDown
                 ref={semesterRef}
                 forInput="semester"
@@ -689,9 +742,9 @@ export default function EditCutiAkademikPage() {
         <div className="row mt-4">
           <div className="col-lg-6">
             <Label
-              text={isProdi ? "Berkas Surat Pernyataan" : "Surat Pernyataan"}
+              text={isClient && isProdi ? "Berkas Surat Pernyataan" : "Surat Pernyataan"}
               htmlFor="suratPernyataan"
-              required={true}
+              required={false}
             />
             <input
               type="file"
@@ -699,14 +752,17 @@ export default function EditCutiAkademikPage() {
               name="suratPernyataan"
               onChange={handleChange}
             />
+            {errors.suratPernyataan && (
+              <span className="fw-normal text-danger">{errors.suratPernyataan}</span>
+            )}
             <small className="text-muted">File sebelumnya: {formData.oldSurat || "-"}</small>
             <br />
-            <small className="text-muted">Format: PDF, DOC, DOCX, JPG, PNG (Max 10MB)</small>
+            <small className="text-muted">Upload file baru jika ingin mengganti. Format: PDF, DOC, DOCX, JPG, PNG (Max 10MB)</small>
           </div>
 
           <div className="col-lg-6">
             <Label
-              text={isProdi ? "Berkas Lampiran" : "Lampiran"}
+              text={isClient && isProdi ? "Berkas Lampiran" : "Lampiran"}
               htmlFor="lampiran"
               required={false}
             />
@@ -716,13 +772,16 @@ export default function EditCutiAkademikPage() {
               name="lampiran"
               onChange={handleChange}
             />
+            {errors.lampiran && (
+              <span className="fw-normal text-danger">{errors.lampiran}</span>
+            )}
             <small className="text-muted">File sebelumnya: {formData.oldLampiran || "-"}</small>
             <br />
-            <small className="text-muted">Format: PDF, DOC, DOCX, JPG, PNG (Max 10MB)</small>
+            <small className="text-muted">Upload file baru jika ingin mengganti. Format: PDF, DOC, DOCX, JPG, PNG (Max 10MB)</small>
           </div>
         </div>
 
-        {isProdi && (
+        {isClient && isProdi && (
           <div className="row mt-4">
             <div className="col-lg-12">
               <Editor

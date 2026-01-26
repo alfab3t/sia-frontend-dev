@@ -10,6 +10,16 @@ import Label from "@/components/common/Label";
 import { useRouter } from "next/navigation";
 import { API_LINK } from "@/lib/constant";
 import { getUserData } from "@/context/user";
+import Cookies from "js-cookie";
+
+// Helper function to get auth headers
+const getAuthHeaders = () => {
+  const token = Cookies.get("jwtToken");
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+};
 
 const Editor = dynamic(() => import("@/components/common/Editor"), {
   ssr: false,
@@ -95,11 +105,17 @@ const generateTahunAkademikOptions = (angkatan) => {
 export default function AddCutiAkademik() {
   const router = useRouter();
   const userData = useMemo(() => getUserData(), []);
+  const [isClient, setIsClient] = useState(false);
 
   const roleId = userData?.roleId || "";
   
   const isProdi = roleId === "ROL71";
   const isMahasiswa = roleId === "ROL23";
+
+  // Fix hydration mismatch
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const [saving, setSaving] = useState(false);
   const [prodiList, setProdiList] = useState([]);
@@ -161,12 +177,9 @@ export default function AddCutiAkademik() {
       pageSize: '100'
     });
 
-    const response = await fetch(`${API_LINK}CutiAkademik?${params}`, {
+    const response = await fetch(`${API_LINK}CutiAkademik/GetAllCutiAkademik?${params}`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      }
+      headers: getAuthHeaders()
     });
 
     if (!response.ok) {
@@ -212,11 +225,11 @@ export default function AddCutiAkademik() {
 
     setLoadingStudents(true);
     try {
-      const response = await fetch(`${API_LINK}Mahasiswa/GetByKonsentrasi?konId=${konId}`, {
+      // Menggunakan username dari userData untuk mendapatkan mahasiswa berdasarkan konsentrasi
+      const username = userData?.username || userData?.nama;
+      const response = await fetch(`${API_LINK}CutiAkademik/GetMahasiswaByKonsentrasi?username=${username}`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
+        headers: getAuthHeaders()
       });
       
       if (response.ok) {
@@ -233,7 +246,7 @@ export default function AddCutiAkademik() {
     } finally {
       setLoadingStudents(false);
     }
-  }, []);
+  }, [userData]);
 
   useEffect(() => {
     const username = userData?.username || userData?.nama;
@@ -245,11 +258,9 @@ export default function AddCutiAkademik() {
     const loadProdi = async () => {
       setLoadingProdi(true);
       try {
-        const response = await fetch(`${API_LINK}Mahasiswa/GetKonsentrasiList?username=${username}`, {
+        const response = await fetch(`${API_LINK}CutiAkademik/GetKonsentrasiBySekprod?username=${username}`, {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
+          headers: getAuthHeaders()
         });
         
         if (response.ok) {
@@ -284,17 +295,15 @@ export default function AddCutiAkademik() {
     
     const loadMahasiswaData = async () => {
       try {
-        const mhsId = userData?.nama || userData?.mhsId || userData?.userid || userData?.username || "";
+        const mhsId = userData?.mhsId || userData?.userid || userData?.username || userData?.nama || "";
         
         if (!mhsId) {
           return;
         }
 
-        const response = await fetch(`${API_LINK}Mahasiswa/GetDetail?mhsId=${mhsId}`, {
+        const response = await fetch(`${API_LINK}CutiAkademik/GetDetailMahasiswa?mahasiswaId=${mhsId}`, {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
+          headers: getAuthHeaders()
         });
         
         if (response.ok) {
@@ -321,7 +330,7 @@ export default function AddCutiAkademik() {
     let targetMhsId = "";
     
     if (isMahasiswa) {
-      targetMhsId = userData?.mhsId || userData?.nama || userData?.userid || userData?.username || "";
+      targetMhsId = userData?.mhsId || userData?.userid || userData?.username || userData?.nama || "";
     } else if (isProdi && formData.mhsId) {
       targetMhsId = formData.mhsId;
     }
@@ -360,11 +369,9 @@ export default function AddCutiAkademik() {
 
     try {
       if (isProdi) {
-        const btResponse = await fetch(`${API_LINK}Mahasiswa/CheckBebasTanggungan?userId=${mhsId}`, {
+        const btResponse = await fetch(`${API_LINK}CutiAkademik/CheckBebasTanggungan?userId=${mhsId}`, {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
+          headers: getAuthHeaders()
         });
         
         if (btResponse.ok) {
@@ -373,11 +380,9 @@ export default function AddCutiAkademik() {
         }
       }
 
-      const response = await fetch(`${API_LINK}Mahasiswa/GetDetail?mhsId=${mhsId}`, {
+      const response = await fetch(`${API_LINK}CutiAkademik/GetDetailMahasiswa?mahasiswaId=${mhsId}`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
+        headers: getAuthHeaders()
       });
       
       if (response.ok) {
@@ -474,20 +479,21 @@ export default function AddCutiAkademik() {
     fd.append("Semester", formData.semester);
     fd.append("Menimbang", formData.menimbang);
     fd.append("ApprovalProdi", approvalProdi);
+    fd.append("CreatedBy", approvalProdi);
   }, [formData, userData]);
 
   const buildMahasiswaFormData = useCallback((fd) => {
-    const mhsId = userData?.mhsId || userData?.nama || userData?.userid || userData?.username || "";
+    const mhsId = userData?.mhsId || userData?.userid || userData?.username || userData?.nama || "";
     
     if (!mhsId) {
       Toast.error("User tidak valid.");
       return false;
     }
     
-    fd.append("Step", "STEP1");
     fd.append("MhsId", mhsId);
     fd.append("TahunAjaran", formData.tahunAjaran);
     fd.append("Semester", formData.semester);
+    fd.append("CreatedBy", mhsId);
     
     return true;
   }, [formData, userData]);
@@ -536,11 +542,14 @@ export default function AddCutiAkademik() {
       appendFilesToFormData(fd);
 
       const endpoint = isProdi 
-        ? `${API_LINK}CutiAkademik/prodi/draft`
-        : `${API_LINK}CutiAkademik/draft`;
+        ? `${API_LINK}CutiAkademik/CreateDraftCutiAkademikByProdi`
+        : `${API_LINK}CutiAkademik/CreateDraftCutiAkademik`;
 
       const res = await fetch(endpoint, {
         method: "POST",
+        headers: {
+          'Authorization': `Bearer ${Cookies.get("jwtToken")}`
+        },
         body: fd,
       });
 
@@ -601,9 +610,17 @@ export default function AddCutiAkademik() {
   ];
 
   const getPageTitle = () => {
+    if (!isClient) return "Tambah Pengajuan Cuti Akademik";
     if (isProdi) return "Tambah Pengajuan Cuti Akademik (Prodi)";
     if (isMahasiswa) return "Tambah Pengajuan Cuti Akademik (Mahasiswa)";
     return "Tambah Pengajuan Cuti Akademik";
+  };
+
+  const getBreadcrumbLabel = () => {
+    if (!isClient) return "Tambah Pengajuan";
+    if (isProdi) return "Tambah Pengajuan (Prodi)";
+    if (isMahasiswa) return "Tambah Pengajuan (Mahasiswa)";
+    return "Tambah Pengajuan";
   };
 
   return (
@@ -614,10 +631,10 @@ export default function AddCutiAkademik() {
         { label: "Sistem Informasi Akademik" },
         { label: "Administrasi Akademik" },
         { label: "Cuti Akademik" },
-        { label: isProdi ? "Tambah Pengajuan (Prodi)" : "Tambah Pengajuan" },
+        { label: getBreadcrumbLabel() },
       ]}
     >
-      {isProdi && formData.mhsId && bebasTanggunganStatus === "NOK" && (
+      {isClient && isProdi && formData.mhsId && bebasTanggunganStatus === "NOK" && (
         <div className="mb-3">
           <div className="alert alert-warning mb-2" role="alert">
             <i className="fas fa-exclamation-triangle me-2"></i>
@@ -636,7 +653,7 @@ export default function AddCutiAkademik() {
       )}
 
       <form onSubmit={handleSubmit}>
-        {isProdi && (
+        {isClient && isProdi && (
           <div className="row mt-3">
             <div className="col-lg-4">
               <DropDown
@@ -688,7 +705,7 @@ export default function AddCutiAkademik() {
 
         <div className="row mt-3">
           <div className="col-lg-6">
-            {(isProdi || isMahasiswa) ? (
+            {isClient && (isProdi || isMahasiswa) ? (
               <DropDown
                 ref={tahunAjaranRef}
                 forInput="tahunAjaran"
@@ -726,7 +743,7 @@ export default function AddCutiAkademik() {
           </div>
 
           <div className="col-lg-6">
-            {(isProdi || isMahasiswa) ? (
+            {isClient && (isProdi || isMahasiswa) ? (
               <DropDown
                 ref={semesterRef}
                 forInput="semester"
@@ -766,7 +783,7 @@ export default function AddCutiAkademik() {
         <div className="row mt-3">
           <div className="col-lg-6">
             <Label
-              text={isProdi ? "Berkas Surat Pernyataan" : "Surat Pernyataan"}
+              text={isClient && isProdi ? "Berkas Surat Pernyataan" : "Surat Pernyataan"}
               htmlFor="suratPernyataan"
               required={true}
             />
@@ -785,7 +802,7 @@ export default function AddCutiAkademik() {
 
           <div className="col-lg-6">
             <Label
-              text={isProdi ? "Berkas Lampiran" : "Lampiran"}
+              text={isClient && isProdi ? "Berkas Lampiran" : "Lampiran"}
               htmlFor="lampiran"
               required={false}
             />
@@ -800,7 +817,7 @@ export default function AddCutiAkademik() {
           </div>
         </div>
 
-        {isProdi && (
+        {isClient && isProdi && (
           <div className="row mt-4">
             <div className="col-lg-12">
               <Editor
@@ -825,7 +842,7 @@ export default function AddCutiAkademik() {
             onClick={handleCancel}
             isDisabled={saving}
           />
-          {!(isProdi && formData.mhsId && bebasTanggunganStatus === "NOK") && (
+          {!(isClient && isProdi && formData.mhsId && bebasTanggunganStatus === "NOK") && (
             <Button
               classType="primary"
               iconName="save"

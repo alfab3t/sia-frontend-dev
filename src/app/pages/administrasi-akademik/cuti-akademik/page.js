@@ -1070,11 +1070,11 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         };
         
       } else if (isFinance || isWadir1) {
-        url = `${API_LINK}CutiAkademik/approve`;
+        url = `${API_LINK}CutiAkademik/ApproveCutiAkademik`;
         payload = {
-          Id: itemId,
-          ApprovedBy: approvedBy,
-          Role: "" 
+          id: itemId,
+          role: roleId,
+          approvedBy: approvedBy
         };
         
       } else {
@@ -1201,13 +1201,12 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       }
 
       const payload = {
-        Id: itemId,
-        Username: username,
-        Role: "auto-detect",
-        Keterangan: null
+        id: itemId,
+        role: roleId,
+        username: username
       };
 
-      const url = `${API_LINK}CutiAkademik/reject`;
+      const url = `${API_LINK}CutiAkademik/RejectCutiAkademik`;
       const res = await fetch(url, {
         method: "PUT",
         headers: { 

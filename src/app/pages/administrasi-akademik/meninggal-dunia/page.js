@@ -1091,6 +1091,85 @@ export default function Page_MeninggalDunia() {
         [loadRiwayat]
     );
 
+    const buildExportParams = useCallback(() => {
+        const params = new URLSearchParams();
+        if (riwayatSearch && riwayatSearch.trim() !== "") {
+            params.append('SearchKeyword', riwayatSearch.trim());
+        }
+        if (filterSort && filterSort !== "") {
+            params.append('Sort', filterSort);
+        }
+        
+        // For Prodi users, add prodi filter based on their konsentrasi
+        if (isProdi && prodiKonsentrasi) {
+            params.append('Prodi', prodiKonsentrasi);
+        }
+        
+        return params;
+    }, [riwayatSearch, filterSort, isProdi, prodiKonsentrasi]);
+
+    const downloadFile = useCallback((blob, response) => {
+        // Create download link
+        const url = globalThis.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        
+        // Set filename from response headers or use default
+        const contentDisposition = response.headers.get('content-disposition');
+        let filename = 'Riwayat_Meninggal_Dunia.xlsx';
+        if (contentDisposition) {
+            const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+            const filenameMatch = filenameRegex.exec(contentDisposition);
+            if (filenameMatch?.[1]) {
+                filename = filenameMatch[1].replaceAll(/['"]/g, '');
+            }
+        }
+        
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        
+        // Cleanup
+        link.remove();
+        globalThis.URL.revokeObjectURL(url);
+    }, []);
+
+    const handleExportExcel = async () => {
+        if (!hasPermission(permission, "meninggal_dunia.export")) {
+            Toast.error("Anda tidak memiliki izin untuk mengekspor data.");
+            return;
+        }
+
+        try {
+            const params = buildExportParams();
+            const queryString = params.toString();
+            const exportUrl = `${API_LINK}MeninggalDunia/ExportRiwayatMeninggalDuniaToExcel${queryString ? '?' + queryString : ''}`;
+            
+            const response = await fetch(exportUrl, {
+                method: 'GET',
+                headers: getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    Toast.error("Sesi habis. Silakan login kembali.");
+                    return;
+                } else if (response.status === 403) {
+                    Toast.error("Anda tidak memiliki akses untuk mengekspor data.");
+                    return;
+                }
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const blob = await response.blob();
+            downloadFile(blob, response);
+            Toast.success("File Excel berhasil diunduh!");
+
+        } catch (error) {
+            Toast.error(`Gagal mengekspor data: ${error.message}`);
+        }
+    };
+
     const filterContentRiwayat = (
         <>
             <DropDown
@@ -1271,24 +1350,7 @@ export default function Page_MeninggalDunia() {
                     <Formsearch
                         onSearch={handleSearchRiwayat}
                         onFilter={handleRiwayatFilter}
-                        onExport={() => {
-                            if (!hasPermission(permission, "meninggal_dunia.export")) {
-                                Toast.error("Anda tidak memiliki izin untuk mengekspor data.");
-                                return;
-                            }
-                            
-                            const params = new URLSearchParams();
-                            if (riwayatSearch && riwayatSearch.trim() !== "") {
-                                params.append('SearchKeyword', riwayatSearch.trim());
-                            }
-                            if (filterSort && filterSort !== "") {
-                                params.append('Sort', filterSort);
-                            }
-                            
-                            const queryString = params.toString();
-                            const exportUrl = `${API_LINK}MeninggalDunia/ExportRiwayatMeninggalDuniaToExcel${queryString ? '?' + queryString : ''}`;
-                            window.open(exportUrl, "_blank");
-                        }}
+                        onExport={handleExportExcel}
                         searchPlaceholder="Cari No. Pengajuan, NIM, Nama, atau Prodi"
                         showAddButton={false}
                         showFilterButton={true}

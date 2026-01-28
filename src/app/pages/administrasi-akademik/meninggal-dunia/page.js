@@ -209,36 +209,36 @@ export default function Page_MeninggalDunia() {
         const itemProdi = item.prodi || item.kon_nama || item.konsentrasi || "";
         
         // Filter by program - only show items from user's program
-        // Handle both full name and abbreviated name
         if (prodiKonsentrasi) {
-            const userProgram = prodiKonsentrasi.toLowerCase();
-            const itemProgram = itemProdi.toLowerCase();
+            const userProgram = prodiKonsentrasi.toLowerCase().trim();
+            const itemProgram = itemProdi.toLowerCase().trim();
             
-            // Check if programs match (handle variations like "TRPAB" vs full name)
+            // Handle both full name and abbreviated name matching
             const programMatches = 
                 itemProgram === userProgram ||
-                itemProgram.includes("teknologi rekayasa pemeliharaan alat berat") ||
-                (userProgram.includes("teknologi rekayasa pemeliharaan alat berat") && 
-                 itemProgram.includes("teknologi rekayasa pemeliharaan alat berat"));
+                itemProgram.includes(userProgram) ||
+                userProgram.includes(itemProgram) ||
+                // Extract abbreviation from parentheses if exists
+                (userProgram.includes('(') && userProgram.includes(')') && 
+                 itemProgram.includes(userProgram.match(/\(([^)]+)\)/)?.[1]?.toLowerCase() || '')) ||
+                // Match without parentheses content
+                itemProgram.replace(/\s*\([^)]*\)\s*$/, '').trim() === 
+                userProgram.replace(/\s*\([^)]*\)\s*$/, '').trim();
             
             if (!programMatches) {
                 return false;
             }
         }
         
-        // For Prodi users, only show Draft and Belum Disetujui Wadir statuses
+        // For Prodi users, only show Draft and Belum Disetujui Wadir 1 statuses
+        // Exclude rejected/ditolak statuses from pengajuan table
+        const statusLower = currentStatus.toLowerCase().trim();
         const allowedStatuses = [
             "draft",
-            "belum disetujui wadir 1",
-            "belum disetujui wadir1",
-            "ditolak wadir1",
-            "ditolak wadir 1",
-            "ditolak"
+            "belum disetujui wadir 1"
         ];
         
-        return allowedStatuses.some(status => 
-            currentStatus.toLowerCase().includes(status.toLowerCase())
-        );
+        return allowedStatuses.includes(statusLower);
     }, []);
 
     const determineItemActions = useCallback((item, roles, userData, permission) => {
@@ -275,7 +275,7 @@ export default function Page_MeninggalDunia() {
             // Draft: Prodi can edit, delete, and submit
             if (hasPermission(permission, "meninggal_dunia.edit")) actions.push("Edit");
             if (hasPermission(permission, "meninggal_dunia.delete")) actions.push("Delete");
-            if (hasPermission(permission, "meninggal_dunia.create")) actions.push("Ajukan");
+            if (hasPermission(permission, "meninggal_dunia.create")) actions.push("Sent");
         }
         // For rejected status and other statuses (Belum Disetujui, Menunggu, etc.), only Detail is available (handled by determineItemActions)
         
@@ -859,8 +859,8 @@ export default function Page_MeninggalDunia() {
                 return;
             }
 
-            if (result?.officialId) {
-                Toast.success(`Pengajuan berhasil diajukan dengan ID: ${result.officialId}`);
+            if (result?.message?.includes("Berhasil")) {
+                Toast.success(result.message);
                 
                 if (isProdi) {
                     const prodiCreatedApps = JSON.parse(sessionStorage.getItem('prodiCreatedMeninggalApps') || '[]');
@@ -1210,7 +1210,7 @@ export default function Page_MeninggalDunia() {
                                         onDetail={handleDetail}
                                         onEdit={handleEdit}
                                         onDelete={handleDelete}
-                                        onAjukan={handleAjukan}
+                                        onSent={handleAjukan}
                                         onApprove={handleApprove}
                                         onReject={handleReject}
                                         onUploadSK={handleUploadSK}

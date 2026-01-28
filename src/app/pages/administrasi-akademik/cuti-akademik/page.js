@@ -1677,6 +1677,20 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
                   onUploadSK={handleUploadSK}
                   onPrint={handlePrint}
                   onDownloadSK={handleDownloadSK}
+                  config={{
+                    statusBadgeMap: {
+                      // Belum Disetujui statuses - use Diproses styling (warning)
+                      "Belum Disetujui Wadir 1": "bg-warning-subtle text-warning",
+                      "Belum Disetujui Finance": "bg-warning-subtle text-warning", 
+                      "Belum Disetujui Prodi": "bg-warning-subtle text-warning",
+                      // Ditolak statuses - use Ditolak styling (danger)
+                      "Ditolak wadir1": "bg-danger-subtle text-danger",
+                      "Ditolak prodi": "bg-danger-subtle text-danger",
+                      "Ditolak finance": "bg-danger-subtle text-danger",
+                      // Additional status variations
+                      "Menunggu Upload SK": "bg-secondary-subtle text-secondary",
+                    }
+                  }}
                 />
 
                 {totalData > 0 && (
@@ -1777,6 +1791,20 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
                     data={dataRiwayat}
                     onDetail={handleDetail}
                     onPrint={handlePrint}
+                    config={{
+                      statusBadgeMap: {
+                        // Belum Disetujui statuses - use Diproses styling (warning)
+                        "Belum Disetujui Wadir 1": "bg-warning-subtle text-warning",
+                        "Belum Disetujui Finance": "bg-warning-subtle text-warning", 
+                        "Belum Disetujui Prodi": "bg-warning-subtle text-warning",
+                        // Ditolak statuses - use Ditolak styling (danger)
+                        "Ditolak wadir1": "bg-danger-subtle text-danger",
+                        "Ditolak prodi": "bg-danger-subtle text-danger",
+                        "Ditolak finance": "bg-danger-subtle text-danger",
+                        // Additional status variations
+                        "Menunggu Upload SK": "bg-secondary-subtle text-secondary",
+                      }
+                    }}
                   />
 
                   {totalDataRiwayat > 0 && (

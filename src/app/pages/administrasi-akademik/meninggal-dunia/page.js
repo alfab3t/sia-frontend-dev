@@ -1467,4 +1467,4 @@ export default function Page_MeninggalDunia() {
             )}
         </MainContent>
     );
-}
+}//ss

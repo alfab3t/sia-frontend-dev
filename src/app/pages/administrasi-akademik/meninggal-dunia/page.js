@@ -565,19 +565,37 @@ export default function Page_MeninggalDunia() {
                     return;
                 }
 
-                // Additional client-side filtering for prodi if needed
+                // Client-side filtering for prodi users
                 if (isProdi && prodiKonsentrasi) {
                     actualData = actualData.filter(item => {
-                        const itemProdi = item.prodi || item.kon_nama || item.konsentrasi || "";
-                        const cleanItemProdi = itemProdi.replace(/\s*\([^)]*\)\s*$/, '').trim();
-                        const cleanProdiKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, '').trim();
+                        const itemProdi = item.Prodi || item.prodi || "";
                         
-                        return cleanItemProdi.toLowerCase().includes(cleanProdiKonsentrasi.toLowerCase()) ||
-                               cleanProdiKonsentrasi.toLowerCase().includes(cleanItemProdi.toLowerCase());
+                        const userProgram = prodiKonsentrasi.toLowerCase().trim();
+                        const itemProgram = itemProdi.toLowerCase().trim();
+                        
+                        // Handle both full name and abbreviated name matching
+                        const programMatches = 
+                            itemProgram === userProgram ||
+                            itemProgram.includes(userProgram) ||
+                            userProgram.includes(itemProgram) ||
+                            // Extract abbreviation from parentheses if exists
+                            (userProgram.includes('(') && userProgram.includes(')') && 
+                             itemProgram.includes(userProgram.match(/\(([^)]+)\)/)?.[1]?.toLowerCase() || '')) ||
+                            // Match without parentheses content
+                            itemProgram.replace(/\s*\([^)]*\)\s*$/, '').trim() === 
+                            userProgram.replace(/\s*\([^)]*\)\s*$/, '').trim();
+                        
+                        return programMatches;
                     });
                 }
 
-                const formattedData = actualData.map((item, index) => {
+                // Client-side pagination since backend doesn't handle it properly
+                const totalItems = actualData.length;
+                const startIndex = (page - 1) * riwayatPageSize;
+                const endIndex = startIndex + riwayatPageSize;
+                const paginatedData = actualData.slice(startIndex, endIndex);
+
+                const formattedData = paginatedData.map((item, index) => {
                     let actions = ["Detail"];
                     if (item.status === "Disetujui") {
                         actions = ["Detail", "DownloadSK"];
@@ -599,8 +617,9 @@ export default function Page_MeninggalDunia() {
                 });
 
                 setDataRiwayat(formattedData);
-                const backendTotalData = data.totalData || actualData.length;
-                setRiwayatTotal(backendTotalData);
+                
+                // Use total items before pagination for proper pagination controls
+                setRiwayatTotal(totalItems);
                 setRiwayatPage(page);
 
             } catch (err) {

@@ -8,6 +8,17 @@ import { useRouter, useParams } from "next/navigation";
 import { API_LINK } from "@/lib/constant";
 import { getUserData } from "@/context/user";
 import { decryptIdUrl, encryptIdUrl } from "@/lib/encryptor";
+import Cookies from "js-cookie";
+
+// Helper function to get authorization headers
+const getAuthHeaders = () => {
+  const token = Cookies.get("jwtToken");
+  return {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+};
 
 export default function DetailMeninggalDunia() {
   const router = useRouter();
@@ -54,12 +65,9 @@ export default function DetailMeninggalDunia() {
       try {
         const encodedRecordId = encodeURIComponent(recordId);
 
-        const response = await fetch(`${API_LINK}MeninggalDunia/${encodedRecordId}`, {
+        const response = await fetch(`${API_LINK}MeninggalDunia/GetDetailMeninggalDunia/${encodedRecordId}`, {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          }
+          headers: getAuthHeaders()
         });
 
         if (!response.ok) {
@@ -126,7 +134,7 @@ export default function DetailMeninggalDunia() {
     }
     
     const filename = detailData.lampiran;
-    const downloadUrl = `${API_LINK}MeninggalDunia/file/${filename}`;
+    const downloadUrl = `${API_LINK}MeninggalDunia/DownloadFileMeninggalDunia/${filename}`;
     window.open(downloadUrl, "_blank");
   };
 
@@ -137,7 +145,7 @@ export default function DetailMeninggalDunia() {
     }
     
     const filename = detailData.sk;
-    const downloadUrl = `${API_LINK}MeninggalDunia/file/${filename}`;
+    const downloadUrl = `${API_LINK}MeninggalDunia/DownloadFileMeninggalDunia/${filename}`;
     window.open(downloadUrl, "_blank");
   };
 
@@ -148,7 +156,7 @@ export default function DetailMeninggalDunia() {
     }
     
     const filename = detailData.spkb;
-    const downloadUrl = `${API_LINK}MeninggalDunia/file/${filename}`;
+    const downloadUrl = `${API_LINK}MeninggalDunia/DownloadFileMeninggalDunia/${filename}`;
     window.open(downloadUrl, "_blank");
   };
 

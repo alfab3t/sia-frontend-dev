@@ -8,6 +8,25 @@ import Label from "@/components/common/Label";
 import { useRouter, useParams } from "next/navigation";
 import { API_LINK } from "@/lib/constant";
 import { decryptIdUrl } from "@/lib/encryptor";
+import Cookies from "js-cookie";
+
+// Helper function to get authorization headers
+const getAuthHeaders = () => {
+  const token = Cookies.get("jwtToken");
+  return {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+};
+
+// Helper function for FormData uploads (no Content-Type header)
+const getAuthHeadersForFormData = () => {
+  const token = Cookies.get("jwtToken");
+  return {
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+};
 
 export default function EditMeninggalDunia() {
   const router = useRouter();
@@ -59,12 +78,9 @@ export default function EditMeninggalDunia() {
       try {
         const encodedRecordId = encodeURIComponent(recordId);
         
-        const response = await fetch(`${API_LINK}MeninggalDunia/${encodedRecordId}`, {
+        const response = await fetch(`${API_LINK}MeninggalDunia/GetDetailMeninggalDunia/${encodedRecordId}`, {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          }
+          headers: getAuthHeaders()
         });
 
         if (!response.ok) {
@@ -169,8 +185,9 @@ export default function EditMeninggalDunia() {
       }
 
       const encodedRecordId = encodeURIComponent(recordId);
-      const res = await fetch(`${API_LINK}MeninggalDunia/${encodedRecordId}`, {
+      const res = await fetch(`${API_LINK}MeninggalDunia/UpdateMeninggalDunia/${encodedRecordId}`, {
         method: "PUT",
+        headers: getAuthHeadersForFormData(),
         body: fd,
       });
 

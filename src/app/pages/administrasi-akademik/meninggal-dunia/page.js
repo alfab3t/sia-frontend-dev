@@ -14,6 +14,25 @@ import { useRouter } from "next/navigation";
 import { API_LINK } from "@/lib/constant";
 import { encryptIdUrl } from "@/lib/encryptor";
 import SweetAlert from "@/components/common/SweetAlert";
+import Cookies from "js-cookie";
+
+// Helper function to get authorization headers
+const getAuthHeaders = () => {
+    const token = Cookies.get("jwtToken");
+    return {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+};
+
+// Helper function for FormData uploads (no Content-Type header)
+const getAuthHeadersForFormData = () => {
+    const token = Cookies.get("jwtToken");
+    return {
+        ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+};
 
 function useUserRoles(userData, permission) {
     const roles = useMemo(() => {
@@ -35,15 +54,21 @@ function usePermissions(userData) {
     useEffect(() => {
         const loadPermission = async () => {
             try {
+                // Check if permissions are already in userData
+                if (userData?.permission && Array.isArray(userData.permission)) {
+                    setPermission({ listPermission: userData.permission });
+                    return;
+                }
+
                 const payload = {
-                    username: userData?.username || "",
+                    username: userData?.nama || userData?.username || "",
                     appId: "APP08",
                     roleId: userData?.roleId || ""
                 };
 
                 const res = await fetch(`${API_LINK}Auth/getpermission`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify(payload),
                 });
                 
@@ -59,12 +84,24 @@ function usePermissions(userData) {
             }
         };
 
-        if (userData?.username) {
+        if (userData?.nama || userData?.username) {
             loadPermission();
         }
     }, [userData]);
 
     return permission;
+}
+
+function hasPermission(permission, permissionKey) {
+    // Handle both old and new permission formats
+    if (permission?.permissions) {
+        // Old format: { permissions: [{ permission: "key", isAllowed: true }] }
+        return permission.permissions.some(p => p.permission === permissionKey && p.isAllowed);
+    } else if (permission?.listPermission) {
+        // New format: { listPermission: ["key1", "key2", ...] }
+        return permission.listPermission.includes(permissionKey);
+    }
+    return false;
 }
 
 export default function Page_MeninggalDunia() {
@@ -95,9 +132,9 @@ export default function Page_MeninggalDunia() {
                     
                     if (!username) return;
 
-                    const response = await fetch(`${API_LINK}Mahasiswa/GetKonsentrasiList?username=${username}`, {
+                    const response = await fetch(`${API_LINK}MeninggalDunia/GetKonsentrasiBySekprod?username=${username}`, {
                         method: 'GET',
-                        headers: { 'Content-Type': 'application/json' }
+                        headers: getAuthHeaders()
                     });
                     
                     if (response.ok) {
@@ -141,15 +178,12 @@ export default function Page_MeninggalDunia() {
         else if (isFinance) params.append('status', "Belum Disetujui Finance");
         else if (isAdmin) params.append('status', "Menunggu Upload SK");
         
-        if (isProdi) params.append('userId', userData?.username || "");
+        if (isProdi) params.append('userId', userData?.nama || userData?.username || "");
 
-        let backendRole = "";
-        if (isProdi) backendRole = "ROL71";
-        else if (isWadir1) backendRole = "ROL999";
-        else if (isFinance) backendRole = "ROL01";
-        else if (isAdmin) backendRole = "ROL21";
-
+        // Use roleId directly from userData instead of hardcoded mapping
+        const backendRole = userData?.roleId || "";
         if (backendRole) params.append('role', backendRole);
+        
         if (search) params.append('search', search);
         params.append('pageNumber', page);
         params.append('pageSize', pengajuanPageSize);
@@ -174,55 +208,107 @@ export default function Page_MeninggalDunia() {
     const filterProdiData = useCallback((item, currentStatus, prodiKonsentrasi) => {
         const itemProdi = item.prodi || item.kon_nama || item.konsentrasi || "";
         
-        if (prodiKonsentrasi && itemProdi !== prodiKonsentrasi) {
-            return false;
+        // Filter by program - only show items from user's program
+        // Handle both full name and abbreviated name
+        if (prodiKonsentrasi) {
+            const userProgram = prodiKonsentrasi.toLowerCase();
+            const itemProgram = itemProdi.toLowerCase();
+            
+            // Check if programs match (handle variations like "TRPAB" vs full name)
+            const programMatches = 
+                itemProgram === userProgram ||
+                itemProgram.includes("teknologi rekayasa pemeliharaan alat berat") ||
+                (userProgram.includes("teknologi rekayasa pemeliharaan alat berat") && 
+                 itemProgram.includes("teknologi rekayasa pemeliharaan alat berat"));
+            
+            if (!programMatches) {
+                return false;
+            }
         }
         
-        return currentStatus === "Draft" || currentStatus === "Belum Disetujui Wadir 1";
+        // For Prodi users, only show Draft and Belum Disetujui Wadir statuses
+        const allowedStatuses = [
+            "draft",
+            "belum disetujui wadir 1",
+            "belum disetujui wadir1",
+            "ditolak wadir1",
+            "ditolak wadir 1",
+            "ditolak"
+        ];
+        
+        return allowedStatuses.some(status => 
+            currentStatus.toLowerCase().includes(status.toLowerCase())
+        );
     }, []);
 
-    const determineItemActions = useCallback((item, roles, userData) => {
+    const determineItemActions = useCallback((item, roles, userData, permission) => {
         const { isProdi, isWadir1, isFinance, isAdmin } = roles;
         const currentStatus = item.status || item.mdu_status || "";
         const hasUploadedSK = item.srt_no || item.suratNo || item.mdu_srt_no;
 
+        let actions = [];
+
+        // Always allow detail if user has view permission
+        if (hasPermission(permission, "meninggal_dunia.view")) {
+            actions.push("Detail");
+        }
+
         if (isProdi) {
-            return determineProdiActions(currentStatus);
+            actions = [...actions, ...determineProdiActions(currentStatus, permission)];
         } else if (isWadir1) {
-            return determineWadir1Actions(currentStatus);
+            actions = [...actions, ...determineWadir1Actions(currentStatus, permission)];
         } else if (isFinance) {
-            return determineFinanceActions(currentStatus);
+            actions = [...actions, ...determineFinanceActions(currentStatus, permission)];
         } else if (isAdmin) {
-            return determineAdminActions(currentStatus, hasUploadedSK);
+            actions = [...actions, ...determineAdminActions(currentStatus, hasUploadedSK, permission)];
         }
 
-        return ["Detail"];
+        return actions.length > 0 ? actions : ["Detail"];
     }, []);
 
-    const determineProdiActions = useCallback((currentStatus) => {
-        if (currentStatus === "Draft") {
-            return ["Detail", "Edit", "Delete", "Ajukan"];
-        } else if (currentStatus === "Belum Disetujui Wadir 1") {
-            return ["Detail"];
+    const determineProdiActions = useCallback((currentStatus, permission) => {
+        let actions = [];
+        
+        const statusLower = currentStatus.toLowerCase().trim();
+        
+        if (statusLower === "draft") {
+            // Draft: Prodi can edit, delete, and submit
+            if (hasPermission(permission, "meninggal_dunia.edit")) actions.push("Edit");
+            if (hasPermission(permission, "meninggal_dunia.delete")) actions.push("Delete");
+            if (hasPermission(permission, "meninggal_dunia.create")) actions.push("Ajukan");
         }
-        return ["Detail"];
+        // For rejected status and other statuses (Belum Disetujui, Menunggu, etc.), only Detail is available (handled by determineItemActions)
+        
+        return actions;
     }, []);
 
-    const determineWadir1Actions = useCallback((currentStatus) => {
+    const determineWadir1Actions = useCallback((currentStatus, permission) => {
+        let actions = [];
+        
         if (currentStatus === "Belum Disetujui Wadir 1") {
-            return ["Detail", "Approve", "Reject"];
+            if (hasPermission(permission, "meninggal_dunia.approve_reject")) {
+                actions.push("Approve", "Reject");
+            }
         }
-        return ["Detail"];
+        
+        return actions;
     }, []);
 
-    const determineFinanceActions = useCallback((currentStatus) => {
+    const determineFinanceActions = useCallback((currentStatus, permission) => {
+        let actions = [];
+        
         if (currentStatus === "Belum Disetujui Finance") {
-            return ["Detail", "Approve", "Reject"];
+            if (hasPermission(permission, "meninggal_dunia.approve_reject")) {
+                actions.push("Approve", "Reject");
+            }
         }
-        return ["Detail"];
+        
+        return actions;
     }, []);
 
-    const determineAdminActions = useCallback((currentStatus, hasUploadedSK) => {
+    const determineAdminActions = useCallback((currentStatus, hasUploadedSK, permission) => {
+        let actions = [];
+        
         const isAllApprovalsComplete = currentStatus && 
             !currentStatus.includes("Belum Disetujui Prodi") && 
             !currentStatus.includes("Belum Disetujui Wadir 1") && 
@@ -235,9 +321,14 @@ export default function Page_MeninggalDunia() {
                            isAllApprovalsComplete;
         
         if (isReadyForSK) {
-            return hasUploadedSK ? ["Detail", "DownloadSK"] : ["Detail", "UploadSK"];
+            if (hasUploadedSK && hasPermission(permission, "meninggal_dunia.print")) {
+                actions.push("DownloadSK");
+            } else if (!hasUploadedSK && hasPermission(permission, "meninggal_dunia.edit")) {
+                actions.push("UploadSK");
+            }
         }
-        return ["Detail"];
+        
+        return actions;
     }, []);
 
     const loadPengajuan = useCallback(
@@ -254,13 +345,10 @@ export default function Page_MeninggalDunia() {
                     return;
                 }
 
-                const url = `${API_LINK}MeninggalDunia/GetAll?${params}`;
+                const url = `${API_LINK}MeninggalDunia/GetAllMeninggalDunia?${params}`;
                 const response = await fetch(url, {
                     method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    }
+                    headers: getAuthHeaders()
                 });
                 
                 if (!response.ok) {
@@ -289,7 +377,7 @@ export default function Page_MeninggalDunia() {
                 const paginatedData = filteredData.slice(startIndex, endIndex);
 
                 const formattedData = paginatedData.map((item, index) => 
-                    formatTableRow(item, index, startIndex, roles, userData)
+                    formatTableRow(item, index, startIndex, roles, userData, permission)
                 );
 
                 setDataPengajuan(formattedData);
@@ -303,7 +391,7 @@ export default function Page_MeninggalDunia() {
                 setLoadingPengajuan(false);
             }
         },
-        [isProdi, isWadir1, isFinance, isAdmin, userData, prodiKonsentrasi, buildApiParams, filterDataByRole, pengajuanPageSize]
+        [isProdi, isWadir1, isFinance, isAdmin, userData, prodiKonsentrasi, buildApiParams, filterDataByRole, pengajuanPageSize, permission]
     );
 
     const extractArrayFromResponse = useCallback((data) => {
@@ -323,20 +411,20 @@ export default function Page_MeninggalDunia() {
     }, []);
 
     const getWadir1Icon = useCallback((status) => {
-        if (!status) return "⏳";
+        if (!status) return "✗";
         
         const statusLower = status.toLowerCase();
         if (statusLower === "draft" || statusLower === "belum disetujui prodi") return "✗";
         if (statusLower === "belum disetujui wadir 1") return "✗";
         if (statusLower === "ditolak") return "✗";
         if (statusLower.includes("disetujui") || statusLower.includes("finance") || statusLower.includes("upload sk")) return "✓";
-        return "⏳";
+        return "✗";
     }, []);
 
-    const formatTableRow = useCallback((item, index, startIndex, roles, userData) => {
+    const formatTableRow = useCallback((item, index, startIndex, roles, userData, permission) => {
         const { isAdmin } = roles;
         const currentStatus = item.status || item.mdu_status || "";
-        const actions = determineItemActions(item, roles, userData);
+        const actions = determineItemActions(item, roles, userData, permission);
 
         const tableData = {
             No: startIndex + index + 1,
@@ -359,8 +447,7 @@ export default function Page_MeninggalDunia() {
         }
 
         return tableData;
-    }, [determineItemActions, getWadir1Icon]);
-
+    }, [determineItemActions, getWadir1Icon, permission]);
 
     const [dataRiwayat, setDataRiwayat] = useState([]);
     const [loadingRiwayat, setLoadingRiwayat] = useState(true);
@@ -374,19 +461,51 @@ export default function Page_MeninggalDunia() {
     const sortRef = useRef();
     const prodiRef = useRef();
 
-    const dataFilterProdi = [
-        { Value: "", Text: "— Semua Prodi —" },
-        { Value: "Manajemen Informatika", Text: "Manajemen Informatika" },
-        { Value: "Mekatronika", Text: "Mekatronika" },
-        { Value: "Teknik Alat Berat", Text: "Teknik Alat Berat" },
-        { Value: "Teknik Otomotif", Text: "Teknik Otomotif" },
-        { Value: "Teknik Pengolahan Hasil Perkebunan", Text: "Teknik Pengolahan Hasil Perkebunan" },
-        { Value: "Teknik Produksi dan Proses Manufaktur", Text: "Teknik Produksi dan Proses Manufaktur" },
-        { Value: "Teknologi Konstruksi Bangunan Gedung", Text: "Teknologi Konstruksi Bangunan Gedung" },
-        { Value: "Teknologi Rekayasa Logistik", Text: "Teknologi Rekayasa Logistik" },
-        { Value: "Teknologi Rekayasa Pemeliharaan Alat Berat", Text: "Teknologi Rekayasa Pemeliharaan Alat Berat" },
-        { Value: "Teknologi Rekayasa Perangkat Lunak", Text: "Teknologi Rekayasa Perangkat Lunak" },
-    ];
+    const [dataFilterProdi, setDataFilterProdi] = useState([
+        { Value: "", Text: "— Semua Prodi —" }
+    ]);
+
+    // Load program studi list from endpoint
+    useEffect(() => {
+        const loadProgramStudiList = async () => {
+            try {
+                const response = await fetch(`${API_LINK}MeninggalDunia/GetProgramStudiListForMeninggalDunia`, {
+                    method: 'GET',
+                    headers: getAuthHeaders()
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const formattedData = [
+                        { Value: "", Text: "— Semua Prodi —" },
+                        ...data.map(item => ({
+                            Value: item.nama || item.name || item.text,
+                            Text: item.nama || item.name || item.text
+                        }))
+                    ];
+                    setDataFilterProdi(formattedData);
+                }
+            } catch (error) {
+                console.error("Error loading program studi list:", error);
+                // Fallback to default if API fails
+                setDataFilterProdi([
+                    { Value: "", Text: "— Semua Prodi —" },
+                    { Value: "Manajemen Informatika", Text: "Manajemen Informatika" },
+                    { Value: "Mekatronika", Text: "Mekatronika" },
+                    { Value: "Teknik Alat Berat", Text: "Teknik Alat Berat" },
+                    { Value: "Teknik Otomotif", Text: "Teknik Otomotif" },
+                    { Value: "Teknik Pengolahan Hasil Perkebunan", Text: "Teknik Pengolahan Hasil Perkebunan" },
+                    { Value: "Teknik Produksi dan Proses Manufaktur", Text: "Teknik Produksi dan Proses Manufaktur" },
+                    { Value: "Teknologi Konstruksi Bangunan Gedung", Text: "Teknologi Konstruksi Bangunan Gedung" },
+                    { Value: "Teknologi Rekayasa Logistik", Text: "Teknologi Rekayasa Logistik" },
+                    { Value: "Teknologi Rekayasa Pemeliharaan Alat Berat", Text: "Teknologi Rekayasa Pemeliharaan Alat Berat" },
+                    { Value: "Teknologi Rekayasa Perangkat Lunak", Text: "Teknologi Rekayasa Perangkat Lunak" },
+                ]);
+            }
+        };
+
+        loadProgramStudiList();
+    }, []);
 
     const loadRiwayat = useCallback(
         async (page = 1, keyword = riwayatSearch, sort = filterSort, prodi = filterProdi) => {
@@ -412,16 +531,19 @@ export default function Page_MeninggalDunia() {
                 
                 const sortParam = sortMap[sort] || sort;
                 if (sortParam) params.append('Sort', sortParam);
+                
+                // For Prodi users, add prodi filter based on their konsentrasi
+                if (isProdi && prodiKonsentrasi) {
+                    params.append('Prodi', prodiKonsentrasi);
+                }
+                
                 params.append('PageNumber', page);
                 params.append('PageSize', riwayatPageSize);
 
-                const url = `${API_LINK}MeninggalDunia/Riwayat?${params}`;
+                const url = `${API_LINK}MeninggalDunia/GetRiwayatMeninggalDunia?${params}`;
                 const response = await fetch(url, {
                     method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    }
+                    headers: getAuthHeaders()
                 });
 
                 if (!response.ok) {
@@ -441,6 +563,18 @@ export default function Page_MeninggalDunia() {
                     setDataRiwayat([]);
                     setRiwayatTotal(0);
                     return;
+                }
+
+                // Additional client-side filtering for prodi if needed
+                if (isProdi && prodiKonsentrasi) {
+                    actualData = actualData.filter(item => {
+                        const itemProdi = item.prodi || item.kon_nama || item.konsentrasi || "";
+                        const cleanItemProdi = itemProdi.replace(/\s*\([^)]*\)\s*$/, '').trim();
+                        const cleanProdiKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, '').trim();
+                        
+                        return cleanItemProdi.toLowerCase().includes(cleanProdiKonsentrasi.toLowerCase()) ||
+                               cleanProdiKonsentrasi.toLowerCase().includes(cleanItemProdi.toLowerCase());
+                    });
                 }
 
                 const formattedData = actualData.map((item, index) => {
@@ -465,7 +599,7 @@ export default function Page_MeninggalDunia() {
                 });
 
                 setDataRiwayat(formattedData);
-                const backendTotalData = data.totalData || 0;
+                const backendTotalData = data.totalData || actualData.length;
                 setRiwayatTotal(backendTotalData);
                 setRiwayatPage(page);
 
@@ -477,7 +611,7 @@ export default function Page_MeninggalDunia() {
                 setLoadingRiwayat(false);
             }
         },
-        [userData, riwayatSearch, filterSort, filterProdi, riwayatPageSize, extractArrayFromResponse]
+        [userData, riwayatSearch, filterSort, filterProdi, riwayatPageSize, extractArrayFromResponse, isProdi, prodiKonsentrasi]
     );
 
 
@@ -570,8 +704,9 @@ export default function Page_MeninggalDunia() {
             formData.append('SKPB', selectedSPKBFile);
             formData.append('ModifiedBy', userData?.nama || userData?.username || 'user_admin');
 
-            const response = await fetch(`${API_LINK}MeninggalDunia/upload-sk`, {
+            const response = await fetch(`${API_LINK}MeninggalDunia/UploadSKMeninggalDunia`, {
                 method: 'PUT',
+                headers: getAuthHeadersForFormData(),
                 body: formData
             });
 
@@ -590,7 +725,7 @@ export default function Page_MeninggalDunia() {
             setSelectedMeninggalId(null);
             
             await loadPengajuan(pengajuanPage);
-            if (isProdi || isWadir1 || isFinance || isDAAK || isAdmin) {
+            if (isProdi || isWadir1 || isFinance || isAdmin) {
                 await loadRiwayat(riwayatPage);
             }
 
@@ -624,21 +759,18 @@ export default function Page_MeninggalDunia() {
                 format: "pdf"
             });
 
-            const downloadUrl = `${API_LINK}MeninggalDunia/cetak-sk/${encodeURIComponent(id)}?${params.toString()}`;
+            const downloadUrl = `${API_LINK}MeninggalDunia/DownloadFileMeninggalDunia/${encodeURIComponent(id)}?${params.toString()}`;
 
             const checkParams = new URLSearchParams({
                 username: username,
                 format: "json"
             });
             
-            const checkUrl = `${API_LINK}MeninggalDunia/cetak-sk/${encodeURIComponent(id)}?${checkParams.toString()}`;
+            const checkUrl = `${API_LINK}MeninggalDunia/GetDetailMeninggalDunia/${encodeURIComponent(id)}?${checkParams.toString()}`;
             
             const checkResponse = await fetch(checkUrl, {
                 method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                }
+                headers: getAuthHeaders()
             });
 
             if (!checkResponse.ok) {
@@ -679,14 +811,11 @@ export default function Page_MeninggalDunia() {
 
         try {
             const encodedId = encodeURIComponent(id);
-            const url = `${API_LINK}MeninggalDunia/finalize/${encodedId}`;
+            const url = `${API_LINK}MeninggalDunia/FinalizeDraftMeninggalDunia/${encodedId}`;
 
             const res = await fetch(url, {
                 method: "POST",
-                headers: { 
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                }
+                headers: getAuthHeaders()
             });
 
             if (!res.ok) {
@@ -764,8 +893,11 @@ export default function Page_MeninggalDunia() {
 
         try {
             const encodedId = encodeURIComponent(id);
-            const url = `${API_LINK}MeninggalDunia/${encodedId}`;
-            const res = await fetch(url, { method: "DELETE" });
+            const url = `${API_LINK}MeninggalDunia/DeleteMeninggalDunia/${encodedId}`;
+            const res = await fetch(url, { 
+                method: "DELETE",
+                headers: getAuthHeaders()
+            });
             
             if (!res.ok) {
                 throw new Error(`HTTP ${res.status}: ${res.statusText}`);
@@ -799,23 +931,21 @@ export default function Page_MeninggalDunia() {
         setLoadingPengajuan(true);
 
         try {
-            const approvedBy = userData?.nama || userData?.username || userData?.userid || "";
-            
             let role = "";
             if (isProdi) role = "prodi";
             else if (isWadir1) role = "wadir1";
             else if (isFinance) role = "finance";
 
-            const payload = { approvedBy, role };
+            const payload = { 
+                username: userData?.nama || userData?.username || userData?.userid || "",
+                role 
+            };
             const encodedItemId = encodeURIComponent(itemId);
-            const url = `${API_LINK}MeninggalDunia/approve/${encodedItemId}`;
+            const url = `${API_LINK}MeninggalDunia/ApproveMeninggalDunia/${encodedItemId}`;
 
             const res = await fetch(url, {
                 method: "PUT",
-                headers: { 
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                },
+                headers: getAuthHeaders(),
                 body: JSON.stringify(payload)
             });
 
@@ -873,19 +1003,17 @@ export default function Page_MeninggalDunia() {
             }
 
             const payload = {
+                username: userData?.nama || userData?.username || userData?.userid || "",
                 keterangan: autoReason,
                 role: backendRole
             };
 
             const encodedItemId = encodeURIComponent(itemId);
-            const url = `${API_LINK}MeninggalDunia/reject/${encodedItemId}`;
+            const url = `${API_LINK}MeninggalDunia/RejectMeninggalDunia/${encodedItemId}`;
 
             const res = await fetch(url, {
                 method: "PUT",
-                headers: { 
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                },
+                headers: getAuthHeaders(),
                 body: JSON.stringify(payload)
             });
 
@@ -994,6 +1122,29 @@ export default function Page_MeninggalDunia() {
         }
     }, [ssoData, userData, loadPengajuan, loadRiwayat, isProdi, isWadir1, isFinance, isAdmin, router, prodiKonsentrasi, loadingProdiKonsentrasi]);
 
+    // Early return for server-side rendering to prevent hydration mismatch
+    if (!isClient) {
+        return (
+            <MainContent
+                layout="Admin"
+                loading={true}
+                title="Pengajuan Meninggal Dunia"
+                breadcrumb={[
+                    { label: "Sistem Informasi Akademik" },
+                    { label: "Administrasi Akademik" },
+                    { label: "Meninggal Dunia" },
+                ]}
+            >
+                <div className="text-center py-4">
+                    <div className="spinner-border" aria-live="polite">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                    <p className="mt-2">Memuat halaman...</p>
+                </div>
+            </MainContent>
+        );
+    }
+
     return (
         <MainContent
             layout="Admin"
@@ -1012,7 +1163,7 @@ export default function Page_MeninggalDunia() {
                     <h5>Daftar Pengajuan Meninggal Dunia</h5>
                     
                     <div className="d-flex justify-content-between align-items-center mb-3">
-                        {isClient && isProdi && (
+                        {isClient && isProdi && hasPermission(permission, "meninggal_dunia.create") && (
                             <Button
                                 classType="primary"
                                 label="+ Tambah"
@@ -1089,6 +1240,11 @@ export default function Page_MeninggalDunia() {
                         onSearch={handleSearchRiwayat}
                         onFilter={handleRiwayatFilter}
                         onExport={() => {
+                            if (!hasPermission(permission, "meninggal_dunia.export")) {
+                                Toast.error("Anda tidak memiliki izin untuk mengekspor data.");
+                                return;
+                            }
+                            
                             const params = new URLSearchParams();
                             if (riwayatSearch && riwayatSearch.trim() !== "") {
                                 params.append('SearchKeyword', riwayatSearch.trim());
@@ -1098,13 +1254,13 @@ export default function Page_MeninggalDunia() {
                             }
                             
                             const queryString = params.toString();
-                            const exportUrl = `${API_LINK}MeninggalDunia/Riwayat/excel${queryString ? '?' + queryString : ''}`;
+                            const exportUrl = `${API_LINK}MeninggalDunia/ExportRiwayatMeninggalDuniaToExcel${queryString ? '?' + queryString : ''}`;
                             window.open(exportUrl, "_blank");
                         }}
                         searchPlaceholder="Cari No. Pengajuan, NIM, Nama, atau Prodi"
                         showAddButton={false}
                         showFilterButton={true}
-                        showExportButton={true}
+                        showExportButton={hasPermission(permission, "meninggal_dunia.export")}
                         exportButtonText="Unduh Excel"
                         filterContent={filterContentRiwayat}
                     />

@@ -10,6 +10,25 @@ import Input from "@/components/common/Input";
 import { useRouter } from "next/navigation";
 import { API_LINK } from "@/lib/constant";
 import { getUserData } from "@/context/user";
+import Cookies from "js-cookie";
+
+// Helper function to get authorization headers
+const getAuthHeaders = () => {
+  const token = Cookies.get("jwtToken");
+  return {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+};
+
+// Helper function for FormData uploads (no Content-Type header)
+const getAuthHeadersForFormData = () => {
+  const token = Cookies.get("jwtToken");
+  return {
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+};
 
 export default function AddMeninggalDunia() {
   const router = useRouter();
@@ -26,7 +45,7 @@ export default function AddMeninggalDunia() {
 
         await fetch(`${API_LINK}Auth/getpermission`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getAuthHeaders(),
           body: JSON.stringify(payload),
         });
 
@@ -45,7 +64,7 @@ export default function AddMeninggalDunia() {
   const [saving, setSaving] = useState(false);
   const [studentList, setStudentList] = useState([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
-  const [konId, setKonId] = useState("");
+  const [prodiKonsentrasi, setProdiKonsentrasi] = useState("");
 
   const mahasiswaRef = useRef();
 
@@ -73,19 +92,19 @@ export default function AddMeninggalDunia() {
           return;
         }
 
-        const response = await fetch(`${API_LINK}Mahasiswa/GetKonsentrasiList?username=${username}`, {
+        const url = `${API_LINK}MeninggalDunia/GetKonsentrasiBySekprod?username=${username}`;
+        
+        const response = await fetch(url, {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
+          headers: getAuthHeaders()
         });
         
         if (response.ok) {
           const data = await response.json();
           
           if (data && data.length > 0) {
-            const userKonId = data[0].id;
-            setKonId(userKonId);
+            const konsentrasiName = data[0].nama || "";
+            setProdiKonsentrasi(konsentrasiName);
           }
         }
       } catch (error) {
@@ -100,41 +119,135 @@ export default function AddMeninggalDunia() {
     const loadStudents = async () => {
       setLoadingStudents(true);
       try {
-        let response;
+        // Always use the main endpoint without konId parameter
+        const url = `${API_LINK}MeninggalDunia/GetMahasiswaDropdownForMeninggalDunia`;
         
-        if (isProdi && konId) {
-          response = await fetch(`${API_LINK}Mahasiswa/GetByKonsentrasi?konId=${konId}`, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            }
-          });
-        } else if (isProdi) {
-          setLoadingStudents(false);
-          return;
-        } else {
-          response = await fetch(`${API_LINK}MeninggalDunia/mahasiswa`, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            }
-          });
-        }
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: getAuthHeaders()
+        });
         
         if (response.ok) {
           const data = await response.json();
           
-          const formattedStudents = data.map(item => {
-            const studentData = {
-              Value: item.mhsId || item.id || item.nim,
-              Text: item.mhsNama || item.nama || item.name || "",
-              Prodi: item.programStudi || item.prodi || item.konNama || item.konsentrasi || "",
-              Angkatan: item.mhsAngkatan || item.angkatan || item.tahunAngkatan || item.year || ""
+          let filteredData = data;
+          
+          // Ensure each item has a unique value before any filtering
+          filteredData = filteredData.map((item, index) => {
+            const baseValue = item.value || item.mhsId || item.id || item.nim;
+            return {
+              ...item,
+              value: baseValue || `dropdown_${index}_${Date.now()}`
             };
+          });
+          
+          // If user is Prodi, we need to filter students by their program
+          if (isProdi && prodiKonsentrasi) {
+            // Since the dropdown API doesn't include program info, we'll need to check each student
+            // For now, let's try a different approach - use a filtered endpoint or filter client-side
+            
+            // Try to get students filtered by konsentrasi ID if we have it
+            try {
+              const konsentrasiResponse = await fetch(`${API_LINK}MeninggalDunia/GetKonsentrasiBySekprod?username=${userData?.username || userData?.nama}`, {
+                method: 'GET',
+                headers: getAuthHeaders()
+              });
+              
+              if (konsentrasiResponse.ok) {
+                const konsentrasiData = await konsentrasiResponse.json();
+                if (konsentrasiData && konsentrasiData.length > 0) {
+                  // Use the new GetMahasiswaByKonsentrasi endpoint with username
+                  const filteredResponse = await fetch(`${API_LINK}MeninggalDunia/GetMahasiswaByKonsentrasi?username=${userData?.username || userData?.nama}`, {
+                    method: 'GET',
+                    headers: getAuthHeaders()
+                  });
+                  
+                  if (filteredResponse.ok) {
+                    const filteredStudentData = await filteredResponse.json();
+                    
+                    // Convert the filtered data to the same format as the dropdown API
+                    filteredData = filteredStudentData.map((item, index) => {
+                        // Use mhsId as the primary identifier
+                        const mhsId = item.mhsId || `mhs_${index}_${Date.now()}`;
+                        const mhsNama = item.mhsNama || `Student ${index}`;
+                        
+                        // Extract angkatan from NIM (first 4 digits usually represent year)
+                        let angkatan = "";
+                        if (mhsId && mhsId.length >= 4) {
+                          const nimYear = mhsId.substring(0, 4);
+                          if (/^\d{4}$/.test(nimYear)) {
+                            angkatan = nimYear;
+                          }
+                        }
+                        
+                        return {
+                          value: mhsId, // Use mhsId directly as value
+                          text: mhsNama, // Use mhsNama directly as text
+                          nimNama: mhsNama, // mhsNama already contains "NIM - NAME" format
+                          programStudi: prodiKonsentrasi || "",
+                          angkatan: angkatan
+                        };
+                    });
+                  }
+                }
+              }
+            } catch (filterError) {
+              console.error("Could not filter by konsentrasi, showing all students:", filterError);
+              // Keep all data if filtering fails
+            }
+          }
+          
+          // Create a Set to track used values and ensure uniqueness
+          const usedValues = new Set();
+          const formattedStudents = filteredData.map((item, index) => {
+            // Get base value - prioritize mhsId from filtered data
+            let baseValue = item.value || item.mhsId || item.id || item.nim;
+            
+            // Ensure baseValue is not empty and unique
+            if (!baseValue) {
+              baseValue = `student_${index}_${Date.now()}`;
+            }
+            
+            // If value is already used, make it unique
+            let uniqueValue = baseValue;
+            let counter = 1;
+            while (usedValues.has(uniqueValue)) {
+              uniqueValue = `${baseValue}_${counter}`;
+              counter++;
+            }
+            
+            // Add to used values set
+            usedValues.add(uniqueValue);
+            
+            // Extract angkatan from Value if not available
+            let angkatan = item.angkatan || "";
+            if (!angkatan && uniqueValue && uniqueValue.length >= 4) {
+              const nimYear = uniqueValue.substring(0, 4);
+              if (/^\d{4}$/.test(nimYear)) {
+                angkatan = nimYear;
+              }
+            }
+            
+            const studentData = {
+              Value: uniqueValue,
+              Text: item.text || item.mhsNama || item.nama || item.name || `Student ${index + 1}`,
+              Prodi: item.programStudi || item.prodi || item.konNama || item.konsentrasi || item.programStudiNama || prodiKonsentrasi || "",
+              Angkatan: angkatan
+            };
+            
             return studentData;
           });
           
           setStudentList(formattedStudents);
+          
+          // Final validation - ensure no empty or duplicate Values
+          const finalValidation = formattedStudents.every(student => 
+            student.Value && student.Value !== "" && typeof student.Value === "string"
+          );
+          
+          if (!finalValidation) {
+            console.error("Warning: Some students have invalid Values");
+          }
         } else {
           Toast.error("Gagal memuat daftar mahasiswa.");
         }
@@ -146,12 +259,9 @@ export default function AddMeninggalDunia() {
       }
     };
 
-    const shouldLoadStudents = (isProdi && konId) || !isProdi;
-    
-    if (shouldLoadStudents) {
-      loadStudents();
-    }
-  }, [isProdi, konId]);
+    // Load students once component is mounted
+    loadStudents();
+  }, [isProdi, prodiKonsentrasi]);
 
   const handleStudentChange = async (e) => {
     const mhsId = e.target.value;
@@ -166,9 +276,11 @@ export default function AddMeninggalDunia() {
       return;
     }
 
+    // Find the selected student from the dropdown list
     const selectedStudent = studentList.find(s => s.Value === mhsId);
     
     if (selectedStudent) {
+      // First, set data from dropdown if available
       setFormData(prev => ({
         ...prev,
         mhsId: mhsId,
@@ -177,19 +289,21 @@ export default function AddMeninggalDunia() {
       }));
     }
 
+    // Try to get additional details from the MeninggalDunia endpoint
     try {
-      const detailResponse = await fetch(`${API_LINK}MeninggalDunia/mahasiswa/${mhsId}`, {
+      const detailResponse = await fetch(`${API_LINK}MeninggalDunia/GetMahasiswaDetailForMeninggalDunia/${mhsId}`, {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
+        headers: getAuthHeaders()
       });
       
       if (detailResponse.ok) {
         const detailData = await detailResponse.json();
         
+        // Try to get program studi information
         try {
-          const prodiResponse = await fetch(`${API_LINK}MeninggalDunia/mahasiswa/${mhsId}/prodi`, {
+          const prodiResponse = await fetch(`${API_LINK}MeninggalDunia/GetMahasiswaProdiForMeninggalDunia/${mhsId}`, {
             method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
+            headers: getAuthHeaders()
           });
           
           let prodiData = null;
@@ -209,6 +323,7 @@ export default function AddMeninggalDunia() {
           
         } catch (prodiError) {
           console.error("Error fetching prodi details:", prodiError);
+          // If prodi API fails, use detail data or dropdown data
           setFormData(prev => ({
             ...prev,
             mhsId: mhsId,
@@ -217,12 +332,14 @@ export default function AddMeninggalDunia() {
           }));
         }
         
+      } else if (detailResponse.status === 404) {
+        // If the specific endpoint doesn't exist, the data from dropdown should be sufficient
       } else {
-        // Keep the data from dropdown if API fails
+        // Detail API error
       }
       
     } catch (error) {
-      console.error("Error fetching student details:", error);
+      // If APIs fail, keep the data from dropdown
     }
   };
 
@@ -301,8 +418,9 @@ export default function AddMeninggalDunia() {
         fd.append("LampiranFile", formData.lampiranMeninggal, formData.lampiranMeninggal.name);
       }
 
-      const res = await fetch(`${API_LINK}MeninggalDunia`, {
+      const res = await fetch(`${API_LINK}MeninggalDunia/CreateMeninggalDunia`, {
         method: "POST",
+        headers: getAuthHeadersForFormData(),
         body: fd,
       });
 
@@ -387,7 +505,6 @@ export default function AddMeninggalDunia() {
               isRequired={true}
               isDisabled={loadingStudents}
               errorMessage={errors.mhsId}
-              searchable={isProdi}
             />
             {loadingStudents && (
               <small className="text-muted">Memuat daftar mahasiswa...</small>

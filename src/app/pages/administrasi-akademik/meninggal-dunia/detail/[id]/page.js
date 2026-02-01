@@ -127,37 +127,130 @@ export default function DetailMeninggalDunia() {
     }
   };
 
-  const handleDownloadReport = () => {
+  const handleDownloadReport = async () => {
     if (!recordId || !detailData?.lampiran) {
       Toast.error("File lampiran tidak tersedia untuk didownload.");
       return;
     }
     
-    const filename = detailData.lampiran;
-    const downloadUrl = `${API_LINK}MeninggalDunia/DownloadFileMeninggalDunia/${filename}`;
-    window.open(downloadUrl, "_blank");
+    try {
+      const filename = detailData.lampiran;
+      const token = Cookies.get("jwtToken");
+      const downloadUrl = `${API_LINK}MeninggalDunia/DownloadFileMeninggalDunia/${filename}`;
+      
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': '*/*'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // Create blob from response
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create download link
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      // Clean up
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      Toast.error(`Gagal mendownload file: ${error.message}`);
+    }
   };
 
-  const handleDownloadSK = () => {
+  const handleDownloadSK = async () => {
     if (!recordId || !detailData?.sk) {
       Toast.error("File SK tidak tersedia untuk didownload.");
       return;
     }
     
-    const filename = detailData.sk;
-    const downloadUrl = `${API_LINK}MeninggalDunia/DownloadFileMeninggalDunia/${filename}`;
-    window.open(downloadUrl, "_blank");
+    try {
+      const filename = detailData.sk;
+      const token = Cookies.get("jwtToken");
+      const downloadUrl = `${API_LINK}MeninggalDunia/DownloadFileMeninggalDunia/${filename}`;
+      
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': '*/*'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // Create blob from response
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create download link
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      // Clean up
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      Toast.error(`Gagal mendownload file: ${error.message}`);
+    }
   };
 
-  const handleDownloadSPKB = () => {
+  const handleDownloadSPKB = async () => {
     if (!recordId || !detailData?.spkb) {
       Toast.error("File SPKB tidak tersedia untuk didownload.");
       return;
     }
     
-    const filename = detailData.spkb;
-    const downloadUrl = `${API_LINK}MeninggalDunia/DownloadFileMeninggalDunia/${filename}`;
-    window.open(downloadUrl, "_blank");
+    try {
+      const filename = detailData.spkb;
+      const token = Cookies.get("jwtToken");
+      const downloadUrl = `${API_LINK}MeninggalDunia/DownloadFileMeninggalDunia/${filename}`;
+      
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': '*/*'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // Create blob from response
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create download link
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      // Clean up
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      Toast.error(`Gagal mendownload file: ${error.message}`);
+    }
   };
 
   const getStatusBadgeClass = (status) => {

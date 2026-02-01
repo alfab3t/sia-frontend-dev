@@ -1399,7 +1399,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   };
 
   const determineDownloadRole = useCallback(() => {
-    if (isAdmin) return "ROL21";
+    if (isAdmin) return "ROL74";
     if (isMahasiswa) return "ROL23";
     return null;
   }, [isAdmin, isMahasiswa]);

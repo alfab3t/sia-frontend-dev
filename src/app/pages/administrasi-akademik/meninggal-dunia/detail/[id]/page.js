@@ -152,7 +152,7 @@ export default function DetailMeninggalDunia() {
 
       // Create blob from response
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = globalThis.URL.createObjectURL(blob);
       
       // Create download link
       const link = document.createElement("a");
@@ -163,7 +163,7 @@ export default function DetailMeninggalDunia() {
       link.remove();
       
       // Clean up
-      window.URL.revokeObjectURL(url);
+      globalThis.URL.revokeObjectURL(url);
     } catch (error) {
       Toast.error(`Gagal mendownload file: ${error.message}`);
     }
@@ -194,7 +194,7 @@ export default function DetailMeninggalDunia() {
 
       // Create blob from response
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = globalThis.URL.createObjectURL(blob);
       
       // Create download link
       const link = document.createElement("a");
@@ -205,7 +205,7 @@ export default function DetailMeninggalDunia() {
       link.remove();
       
       // Clean up
-      window.URL.revokeObjectURL(url);
+      globalThis.URL.revokeObjectURL(url);
     } catch (error) {
       Toast.error(`Gagal mendownload file: ${error.message}`);
     }
@@ -236,7 +236,7 @@ export default function DetailMeninggalDunia() {
 
       // Create blob from response
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = globalThis.URL.createObjectURL(blob);
       
       // Create download link
       const link = document.createElement("a");
@@ -247,7 +247,7 @@ export default function DetailMeninggalDunia() {
       link.remove();
       
       // Clean up
-      window.URL.revokeObjectURL(url);
+      globalThis.URL.revokeObjectURL(url);
     } catch (error) {
       Toast.error(`Gagal mendownload file: ${error.message}`);
     }

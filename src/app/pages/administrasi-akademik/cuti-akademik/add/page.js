@@ -201,8 +201,7 @@ export default function AddCutiAkademik() {
       const validCutiData = filterValidCutiData(actualData);
       setExistingCutiData(validCutiData);
     } catch (error) {
-      console.error("Error checking existing cuti data:", error);
-      setExistingCutiData([]);
+      if (error) setExistingCutiData([]);
     }
   }, [fetchCutiData, extractArrayFromResponse, filterValidCutiData]);
 

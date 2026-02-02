@@ -1502,7 +1502,6 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       await processSuccessfulResponse(response, id);
 
     } catch (error) {
-      console.error("Error downloading SK:", error);
       Toast.error(`Gagal download SK: ${error.message}`);
     }
   };

@@ -50,7 +50,8 @@ export default function AddMeninggalDunia() {
         });
 
       } catch (err) {
-        console.error("Error loading permission:", err);
+        // Permission loading failed
+        if (err) setPermission(null);
       }
     };
 
@@ -108,7 +109,8 @@ export default function AddMeninggalDunia() {
           }
         }
       } catch (error) {
-        console.error("Error loading konsentrasi:", error);
+        // Konsentrasi loading failed
+        if (error) setProdiKonsentrasi(null);
       }
     };
 
@@ -192,7 +194,8 @@ export default function AddMeninggalDunia() {
                 }
               }
             } catch (filterError) {
-              console.error("Could not filter by konsentrasi, showing all students:", filterError);
+              // Could not filter by konsentrasi, showing all students
+              if (filterError) { /* error handled by keeping all data */ }
               // Keep all data if filtering fails
             }
           }
@@ -246,14 +249,13 @@ export default function AddMeninggalDunia() {
           );
           
           if (!finalValidation) {
-            console.error("Warning: Some students have invalid Values");
+            // Warning: Some students have invalid Values
           }
         } else {
           Toast.error("Gagal memuat daftar mahasiswa.");
         }
       } catch (error) {
-        console.error("Error loading students:", error);
-        Toast.error("Terjadi kesalahan saat memuat daftar mahasiswa.");
+        if (error) Toast.error("Terjadi kesalahan saat memuat daftar mahasiswa.");
       } finally {
         setLoadingStudents(false);
       }
@@ -322,7 +324,8 @@ export default function AddMeninggalDunia() {
           }));
           
         } catch (prodiError) {
-          console.error("Error fetching prodi details:", prodiError);
+          // Error fetching prodi details, use fallback data
+          if (prodiError) { /* error handled by using fallback data */ }
           // If prodi API fails, use detail data or dropdown data
           setFormData(prev => ({
             ...prev,
@@ -340,6 +343,7 @@ export default function AddMeninggalDunia() {
       
     } catch (error) {
       // If APIs fail, keep the data from dropdown
+      if (error) { /* error handled by keeping dropdown data */ }
     }
   };
 

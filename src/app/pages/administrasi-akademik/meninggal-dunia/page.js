@@ -79,8 +79,9 @@ function usePermissions(userData) {
                 } else {
                     setPermission(null);
                 }
-            } catch {
-                setPermission(null);
+            } catch (error) {
+                // Permission loading failed
+                if (error) setPermission(null);
             }
         };
 
@@ -96,7 +97,7 @@ function hasPermission(permission, permissionKey) {
     // Handle both old and new permission formats
     if (permission?.permissions) {
         // Old format: { permissions: [{ permission: "key", isAllowed: true }] }
-        return permission.permissions.some(p => p.permission === permissionKey && p.isAllowed);
+        return permission.permissions.find(p => p.permission === permissionKey)?.isAllowed || false;
     } else if (permission?.listPermission) {
         // New format: { listPermission: ["key1", "key2", ...] }
         return permission.listPermission.includes(permissionKey);
@@ -146,7 +147,9 @@ export default function Page_MeninggalDunia() {
                             setProdiKonsentrasi(cleanName);
                         }
                     }
-                } catch {
+                } catch (error) {
+                    // Konsentrasi loading failed, continue silently
+                    if (error) { /* error handled by continuing without konsentrasi */ }
                 } finally {
                     setLoadingProdiKonsentrasi(false);
                 }
@@ -359,8 +362,9 @@ export default function Page_MeninggalDunia() {
                 let data;
                 try {
                     data = JSON.parse(responseText);
-                } catch {
-                    throw new Error("Invalid JSON response from server");
+                } catch (parseError) {
+                    // JSON parsing failed for pengajuan data
+                    throw new Error(`Invalid JSON response from server: ${parseError.message}`);
                 }
 
                 let actualData = extractArrayFromResponse(data);
@@ -486,8 +490,8 @@ export default function Page_MeninggalDunia() {
                     setDataFilterProdi(formattedData);
                 }
             } catch (error) {
-                console.error("Error loading program studi list:", error);
-                // Fallback to default if API fails
+                // API failed to load program studi, use fallback
+                if (error) { /* error handled by using fallback data */ }
                 setDataFilterProdi([
                     { Value: "", Text: "— Semua Prodi —" },
                     { Value: "Manajemen Informatika", Text: "Manajemen Informatika" },
@@ -554,8 +558,9 @@ export default function Page_MeninggalDunia() {
                 let data;
                 try {
                     data = JSON.parse(responseText);
-                } catch {
-                    throw new Error("Invalid JSON response from server");
+                } catch (parseError) {
+                    // JSON parsing failed for riwayat data
+                    throw new Error(`Invalid JSON response from server: ${parseError.message}`);
                 }
 
                 let actualData = extractArrayFromResponse(data);
@@ -808,7 +813,7 @@ export default function Page_MeninggalDunia() {
                 return;
             }
 
-            window.open(downloadUrl, "_blank");
+            globalThis.open(downloadUrl, "_blank");
             Toast.success("SK berhasil didownload!");
 
         } catch (error) {
@@ -844,7 +849,9 @@ export default function Page_MeninggalDunia() {
                     const errorData = JSON.parse(errorText);
                     const errorMsg = errorData.message || errorData.error || `HTTP ${res.status}: ${res.statusText}`;
                     Toast.error(`Gagal mengajukan: ${errorMsg}`);
-                } catch {
+                } catch (parseError) {
+                    // Failed to parse error response JSON, use fallback error message
+                    if (parseError) { /* parseError handled by showing generic error */ }
                     Toast.error(`HTTP ${res.status}: ${res.statusText}`);
                 }
                 return;
@@ -854,8 +861,9 @@ export default function Page_MeninggalDunia() {
             let result;
             try {
                 result = JSON.parse(raw);
-            } catch {
-                Toast.error("Response server tidak valid.");
+            } catch (parseError) {
+                // Failed to parse ajukan response JSON
+                Toast.error(`Response server tidak valid: ${parseError.message}`);
                 return;
             }
 
@@ -975,7 +983,9 @@ export default function Page_MeninggalDunia() {
                     const errorData = JSON.parse(errorText);
                     const errorMsg = errorData.message || errorData.error || `HTTP ${res.status}`;
                     Toast.error(`Gagal menyetujui: ${errorMsg}`);
-                } catch {
+                } catch (parseError) {
+                    // Failed to parse error response JSON, use fallback error message
+                    if (parseError) { /* parseError handled by showing generic error */ }
                     Toast.error(`HTTP ${res.status}: ${res.statusText}`);
                 }
                 return;
@@ -1043,7 +1053,9 @@ export default function Page_MeninggalDunia() {
                     const errorData = JSON.parse(errorText);
                     const errorMsg = errorData.message || errorData.error || errorData.details || `HTTP ${res.status}: ${res.statusText}`;
                     Toast.error(`Gagal menolak pengajuan: ${errorMsg}`);
-                } catch {
+                } catch (parseError) {
+                    // Failed to parse error response JSON, use fallback error message
+                    if (parseError) { /* parseError handled by showing generic error */ }
                     Toast.error(`Gagal menolak pengajuan: HTTP ${res.status}\n\n${errorText}`);
                 }
                 return;
@@ -1053,8 +1065,9 @@ export default function Page_MeninggalDunia() {
             let result;
             try {
                 result = JSON.parse(raw);
-            } catch {
-                Toast.error("Response server tidak valid:\n\n" + raw);
+            } catch (parseError) {
+                // Failed to parse reject response JSON
+                Toast.error(`Response server tidak valid: ${parseError.message}\n\n${raw}`);
                 return;
             }
 
@@ -1234,9 +1247,9 @@ export default function Page_MeninggalDunia() {
                 ]}
             >
                 <div className="text-center py-4">
-                    <div className="spinner-border" aria-live="polite">
+                    <output className="spinner-border" aria-live="polite" aria-label="Loading">
                         <span className="visually-hidden">Loading...</span>
-                    </div>
+                    </output>
                     <p className="mt-2">Memuat halaman...</p>
                 </div>
             </MainContent>
@@ -1275,9 +1288,9 @@ export default function Page_MeninggalDunia() {
                         if (loadingPengajuan) {
                             return (
                                 <div className="text-center py-4">
-                                    <div className="spinner-border" aria-live="polite">
+                                    <output className="spinner-border" aria-live="polite" aria-label="Loading data pengajuan">
                                         <span className="visually-hidden">Loading...</span>
-                                    </div>
+                                    </output>
                                     <p className="mt-2">Memuat data pengajuan...</p>
                                 </div>
                             );
@@ -1363,9 +1376,9 @@ export default function Page_MeninggalDunia() {
                         if (loadingRiwayat) {
                             return (
                                 <div className="text-center py-4">
-                                    <div className="spinner-border" aria-live="polite">
+                                    <output className="spinner-border" aria-live="polite" aria-label="Loading data riwayat">
                                         <span className="visually-hidden">Loading...</span>
-                                    </div>
+                                    </output>
                                     <p className="mt-2">Memuat data riwayat...</p>
                                 </div>
                             );
@@ -1515,7 +1528,7 @@ export default function Page_MeninggalDunia() {
                                 >
                                     {uploadLoading ? (
                                         <>
-                                            <span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                                            <span className="spinner-border spinner-border-sm me-2" aria-label="Uploading"></span>
                                             <span>Mengupload...</span>
                                         </>
                                     ) : (

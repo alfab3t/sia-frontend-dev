@@ -1317,7 +1317,7 @@ export default function Page_MeninggalDunia() {
                                                 "Ditolak wadir1": "bg-danger-subtle text-danger",
                                                 "Ditolak prodi": "bg-danger-subtle text-danger",
                                                 "Ditolak finance": "bg-danger-subtle text-danger",
-                                                "Menunggu Upload SK": "bg-secondary-subtle text-secondary",
+                                                "Menunggu Upload SK": "bg-warning-subtle text-warning",
                                             }
                                         }}
                                     />
@@ -1400,7 +1400,7 @@ export default function Page_MeninggalDunia() {
                                                 "Ditolak prodi": "bg-danger-subtle text-danger",
                                                 "Ditolak finance": "bg-danger-subtle text-danger",
                                                 // Additional status variations
-                                                "Menunggu Upload SK": "bg-secondary-subtle text-secondary",
+                                                "Menunggu Upload SK": "bg-warning-subtle text-warning",
                                             }
                                         }}
                                     />

@@ -154,6 +154,12 @@ export default function EditMeninggalDunia() {
   const validate = () => {
     const newErrors = {};
     
+    // Validasi MhsId
+    if (!formData.mhsId || formData.mhsId.trim() === "") {
+      newErrors.mhsId = "ID Mahasiswa wajib diisi.";
+    }
+    
+    // Validasi lampiran - harus ada file baru atau file existing
     if (!formData.lampiranMeninggal && !formData.existingLampiran) {
       newErrors.lampiranMeninggal = "Lampiran file meninggal dunia wajib di-upload.";
     }
@@ -178,10 +184,15 @@ export default function EditMeninggalDunia() {
     try {
       const fd = new FormData();
       
+      // Add required fields based on successful curl
       fd.append("MhsId", formData.mhsId);
       
+      // Add Lampiran field (required by backend)
       if (formData.lampiranMeninggal && formData.lampiranMeninggal instanceof File) {
+        fd.append("Lampiran", formData.lampiranMeninggal.name);
         fd.append("LampiranFile", formData.lampiranMeninggal, formData.lampiranMeninggal.name);
+      } else if (formData.existingLampiran) {
+        fd.append("Lampiran", formData.existingLampiran);
       }
 
       const encodedRecordId = encodeURIComponent(recordId);
@@ -191,30 +202,38 @@ export default function EditMeninggalDunia() {
         body: fd,
       });
 
-      const raw = await res.text();
+      if (!res.ok) {
+        const errorText = await res.text();
+        let errorMessage = `HTTP ${res.status}: ${res.statusText}`;
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          // If not JSON, use the raw text
+          if (errorText) errorMessage = errorText;
+        }
+        
+        throw new Error(errorMessage);
+      }
 
+      const raw = await res.text();
       let result;
+      
       try {
         result = JSON.parse(raw);
       } catch {
-        if (res.ok) {
-          Toast.success("Data berhasil diperbarui.");
-          router.push("/pages/administrasi-akademik/meninggal-dunia");
-          return;
-        } else {
-          Toast.error("Server mengirim response tidak valid:\n\n" + raw);
-          return;
-        }
+        // If response is not JSON but request was successful
+        Toast.success("Data berhasil diperbarui.");
+        router.push("/pages/administrasi-akademik/meninggal-dunia");
+        return;
       }
 
-      if (res.ok) {
-        Toast.success(result?.message || "Data berhasil diperbarui.");
-        router.push("/pages/administrasi-akademik/meninggal-dunia");
-      } else {
-        Toast.error(result?.message || "Gagal memperbarui data.");
-      }
+      Toast.success(result?.message || "Data berhasil diperbarui.");
+      router.push("/pages/administrasi-akademik/meninggal-dunia");
+      
     } catch (err) {
-      Toast.error(err.message);
+      Toast.error(`Gagal memperbarui data: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -336,9 +355,9 @@ export default function EditMeninggalDunia() {
               <span className="fw-normal text-danger">{errors.lampiranMeninggal}</span>
             )}
             <small className="text-muted d-block mt-1">
-              Format yang didukung: PDF, JPG, JPEG, PNG (Maksimal 10MB)
+              Format yang didukung: PDF, DOC, DOCX, JPG, JPEG, PNG (Maksimal 10MB)
               {formData.existingLampiran && <br />}
-              {formData.existingLampiran && ""}
+              {formData.existingLampiran && "Kosongkan jika tidak ingin mengubah file"}
             </small>
           </div>
         </div>
@@ -354,7 +373,7 @@ export default function EditMeninggalDunia() {
           <Button
             classType="primary"
             iconName="save"
-            label={saving ? "Menyimpan..." : "Simpan Editor"}
+            label={saving ? "Menyimpan..." : "Simpan Perubahan"}
             type="submit"
             isDisabled={saving}
           />

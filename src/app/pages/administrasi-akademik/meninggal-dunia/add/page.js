@@ -278,72 +278,42 @@ export default function AddMeninggalDunia() {
       return;
     }
 
-    // Find the selected student from the dropdown list
-    const selectedStudent = studentList.find(s => s.Value === mhsId);
-    
-    if (selectedStudent) {
-      // First, set data from dropdown if available
-      setFormData(prev => ({
-        ...prev,
-        mhsId: mhsId,
-        prodi: selectedStudent.Prodi || "",
-        tahunAngkatan: selectedStudent.Angkatan || ""
-      }));
-    }
-
-    // Try to get additional details from the MeninggalDunia endpoint
     try {
-      const detailResponse = await fetch(`${API_LINK}MeninggalDunia/GetMahasiswaDetailForMeninggalDunia/${mhsId}`, {
+      // Use only GetMahasiswaDetailForMeninggalDunia endpoint
+      const response = await fetch(`${API_LINK}MeninggalDunia/GetMahasiswaDetailForMeninggalDunia/${mhsId}`, {
         method: 'GET',
         headers: getAuthHeaders()
       });
       
-      if (detailResponse.ok) {
-        const detailData = await detailResponse.json();
+      if (response.ok) {
+        const data = await response.json();
         
-        // Try to get program studi information
-        try {
-          const prodiResponse = await fetch(`${API_LINK}MeninggalDunia/GetMahasiswaProdiForMeninggalDunia/${mhsId}`, {
-            method: 'GET',
-            headers: getAuthHeaders()
-          });
-          
-          let prodiData = null;
-          if (prodiResponse.ok) {
-            prodiData = await prodiResponse.json();
-          }
-          
-          const finalProdi = prodiData?.nama || prodiData?.prodi || prodiData?.proNama || detailData?.prodi || detailData?.programStudi || detailData?.konNama || selectedStudent?.Prodi || "";
-          const finalAngkatan = detailData?.mhsAngkatan || detailData?.angkatan || detailData?.tahunAngkatan || selectedStudent?.Angkatan || "";
-          
-          setFormData(prev => ({
-            ...prev,
-            mhsId: mhsId,
-            prodi: finalProdi,
-            tahunAngkatan: finalAngkatan
-          }));
-          
-        } catch (prodiError) {
-          // Error fetching prodi details, use fallback data
-          if (prodiError) { /* error handled by using fallback data */ }
-          // If prodi API fails, use detail data or dropdown data
-          setFormData(prev => ({
-            ...prev,
-            mhsId: mhsId,
-            prodi: detailData?.prodi || detailData?.programStudi || detailData?.konNama || selectedStudent?.Prodi || prev.prodi,
-            tahunAngkatan: detailData?.mhsAngkatan || detailData?.angkatan || detailData?.tahunAngkatan || selectedStudent?.Angkatan || prev.tahunAngkatan
-          }));
-        }
-        
-      } else if (detailResponse.status === 404) {
-        // If the specific endpoint doesn't exist, the data from dropdown should be sufficient
+        // Set form data from the detail endpoint response
+        setFormData(prev => ({
+          ...prev,
+          mhsId: mhsId,
+          prodi: data.programStudi || data.konsentrasi || "",
+          tahunAngkatan: data.mhsAngkatan || ""
+        }));
       } else {
-        // Detail API error
+        // If API fails, set basic data
+        setFormData(prev => ({
+          ...prev,
+          mhsId: mhsId,
+          prodi: "",
+          tahunAngkatan: ""
+        }));
+        Toast.error("Gagal memuat detail mahasiswa.");
       }
-      
     } catch (error) {
-      // If APIs fail, keep the data from dropdown
-      if (error) { /* error handled by keeping dropdown data */ }
+      // If error occurs, set basic data
+      setFormData(prev => ({
+        ...prev,
+        mhsId: mhsId,
+        prodi: "",
+        tahunAngkatan: ""
+      }));
+      Toast.error(`Terjadi kesalahan saat memuat detail mahasiswa: ${error.message || error}`);
     }
   };
 

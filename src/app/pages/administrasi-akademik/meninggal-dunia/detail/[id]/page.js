@@ -257,24 +257,31 @@ export default function DetailMeninggalDunia() {
     if (!status) return 'badge bg-light text-dark';
     
     const statusLower = status.toLowerCase();
-    switch (statusLower) {
-      case 'draft':
-        return 'badge bg-secondary';
-      case 'disetujui':
-        return 'badge bg-success';
-      case 'ditolak':
-        return 'badge bg-danger';
-      case 'belum disetujui prodi':
-        return 'badge bg-warning text-dark';
-      case 'belum disetujui wadir 1':
-        return 'badge bg-warning text-dark';
-      case 'belum disetujui finance':
-        return 'badge bg-warning text-dark';
-      case 'menunggu upload sk':
-        return 'badge bg-info';
-      default:
-        return 'badge bg-light text-dark';
-    }
+    
+    // Status badge mapping consistent with page.js
+    const statusBadgeMap = {
+      // Draft status
+      'draft': 'badge bg-info-subtle text-info',
+      
+      // Disetujui status
+      'disetujui': 'badge bg-success-subtle text-success',
+      
+      // Belum Disetujui statuses - use warning styling
+      'belum disetujui wadir 1': 'badge bg-warning-subtle text-warning',
+      'belum disetujui finance': 'badge bg-warning-subtle text-warning', 
+      'belum disetujui prodi': 'badge bg-warning-subtle text-warning',
+      
+      // Ditolak statuses - use danger styling
+      'ditolak wadir1': 'badge bg-danger-subtle text-danger',
+      'ditolak prodi': 'badge bg-danger-subtle text-danger',
+      'ditolak finance': 'badge bg-danger-subtle text-danger',
+      'ditolak': 'badge bg-danger-subtle text-danger', // Generic ditolak
+      
+      // Additional status variations
+      'menunggu upload sk': 'badge bg-warning-subtle text-warning',
+    };
+    
+    return statusBadgeMap[statusLower] || 'badge bg-light text-dark';
   };
 
   if (!mounted) {

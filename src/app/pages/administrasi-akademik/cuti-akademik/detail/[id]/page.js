@@ -34,18 +34,41 @@ export default function DetailCutiAkademikPage() {
   }, [params]);
 
   const getStatusBadge = (status) => {
-    const statusMap = {
-      'Menunggu Persetujuan': { class: 'warning', text: 'Menunggu Persetujuan' },
-      'Disetujui Prodi': { class: 'info', text: 'Disetujui Prodi' },
-      'Disetujui': { class: 'success', text: 'Disetujui' },
-      'Ditolak': { class: 'danger', text: 'Ditolak' },
-      'Dalam Proses': { class: 'primary', text: 'Dalam Proses' }
+    if (!status) return <span className="badge bg-light text-dark">Tidak Diketahui</span>;
+    
+    const statusLower = status.toLowerCase();
+    
+    // Status badge mapping consistent with page.js
+    const statusBadgeMap = {
+      // Draft status
+      'draft': 'badge bg-info-subtle text-info',
+      
+      // Disetujui status
+      'disetujui': 'badge bg-success-subtle text-success',
+      
+      // Belum Disetujui statuses - use warning styling
+      'belum disetujui wadir 1': 'badge bg-warning-subtle text-warning',
+      'belum disetujui finance': 'badge bg-warning-subtle text-warning', 
+      'belum disetujui prodi': 'badge bg-warning-subtle text-warning',
+      'menunggu persetujuan': 'badge bg-warning-subtle text-warning',
+      
+      // Ditolak statuses - use danger styling
+      'ditolak wadir1': 'badge bg-danger-subtle text-danger',
+      'ditolak prodi': 'badge bg-danger-subtle text-danger',
+      'ditolak finance': 'badge bg-danger-subtle text-danger',
+      'ditolak': 'badge bg-danger-subtle text-danger',
+      
+      // Additional status variations
+      'menunggu upload sk': 'badge bg-warning-subtle text-warning',
+      'disetujui prodi': 'badge bg-info-subtle text-info',
+      'dalam proses': 'badge bg-primary-subtle text-primary',
     };
     
-    const statusInfo = statusMap[status] || { class: 'secondary', text: status || 'Tidak Diketahui' };
+    const badgeClass = statusBadgeMap[statusLower] || 'badge bg-light text-dark';
+    
     return (
-      <span className={`badge bg-${statusInfo.class}`}>
-        {statusInfo.text}
+      <span className={badgeClass}>
+        {status}
       </span>
     );
   };
@@ -148,7 +171,7 @@ export default function DetailCutiAkademikPage() {
 
       // Create blob from response
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = globalThis.URL.createObjectURL(blob);
       
       // Create download link
       const link = document.createElement("a");
@@ -159,7 +182,7 @@ export default function DetailCutiAkademikPage() {
       link.remove();
       
       // Clean up
-      window.URL.revokeObjectURL(url);
+      globalThis.URL.revokeObjectURL(url);
       
     } catch (error) {
       Toast.error(`Gagal mendownload file: ${error.message}`);

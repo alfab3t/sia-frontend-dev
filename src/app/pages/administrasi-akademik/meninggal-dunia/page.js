@@ -170,30 +170,6 @@ export default function Page_MeninggalDunia() {
     const [pengajuanTotalData, setPengajuanTotalData] = useState(0);
     const pengajuanPageSize = 10;
 
-    const buildApiParams = useCallback((roles, userData, search, page) => {
-        const { isProdi, isWadir1, isFinance, isAdmin } = roles;
-        
-        const params = new URLSearchParams();
-        
-        params.append('mhsId', '%');
-        
-        if (isWadir1) params.append('status', "Belum Disetujui Wadir 1");
-        else if (isFinance) params.append('status', "Belum Disetujui Finance");
-        else if (isAdmin) params.append('status', "Menunggu Upload SK");
-        
-        if (isProdi) params.append('userId', userData?.nama || userData?.username || "");
-
-        // Use roleId directly from userData instead of hardcoded mapping
-        const backendRole = userData?.roleId || "";
-        if (backendRole) params.append('role', backendRole);
-        
-        if (search) params.append('search', search);
-        params.append('pageNumber', page);
-        params.append('pageSize', pengajuanPageSize);
-
-        return params;
-    }, [pengajuanPageSize]);
-
     const filterDataByRole = useCallback((data, roles, prodiKonsentrasi) => {
         const { isProdi } = roles;
         
@@ -340,12 +316,32 @@ export default function Page_MeninggalDunia() {
                 setLoadingPengajuan(true);
 
                 const roles = { isProdi, isWadir1, isFinance, isAdmin };
-                const params = buildApiParams(roles, userData, "", page);
                 
-                if (!params) {
-                    setDataPengajuan([]);
-                    setPengajuanTotalData(0);
-                    return;
+                // Build API params but don't use pagination since backend returns all data
+                const params = new URLSearchParams();
+                params.append('mhsId', '%');
+                
+                // Set status filter based on role - but NOT for Prodi
+                if (isWadir1) {
+                    params.append('status', "Belum Disetujui Wadir 1");
+                } else if (isFinance) {
+                    params.append('status', "Belum Disetujui Finance");
+                } else if (isAdmin) {
+                    params.append('status', "Menunggu Upload SK");
+                }
+                
+                // Set userId for Prodi to filter by their submissions
+                if (isProdi) {
+                    const userId = userData?.nama || userData?.username || "";
+                    if (userId) {
+                        params.append('userId', userId);
+                    }
+                }
+
+                // Always send role parameter
+                const backendRole = userData?.roleId || "";
+                if (backendRole) {
+                    params.append('role', backendRole);
                 }
 
                 const url = `${API_LINK}MeninggalDunia/GetAllMeninggalDunia?${params}`;
@@ -363,7 +359,6 @@ export default function Page_MeninggalDunia() {
                 try {
                     data = JSON.parse(responseText);
                 } catch (parseError) {
-                    // JSON parsing failed for pengajuan data
                     throw new Error(`Invalid JSON response from server: ${parseError.message}`);
                 }
 
@@ -375,7 +370,31 @@ export default function Page_MeninggalDunia() {
                 }
 
                 const filteredData = filterDataByRole(actualData, roles, prodiKonsentrasi);
+                
+                // For Prodi users, sort by ID (newest first) to show latest drafts at top
+                if (isProdi) {
+                    filteredData.sort((a, b) => {
+                        // Use ID as primary sort (higher ID = newer)
+                        const idA = Number.parseInt(a.id || 0);
+                        const idB = Number.parseInt(b.id || 0);
+                        
+                        // If both are numbers, sort by ID descending
+                        if (!Number.isNaN(idA) && !Number.isNaN(idB)) {
+                            return idB - idA;
+                        }
+                        
+                        // If one is string (like "054/PA/MD/II/2026"), put numbers first
+                        if (!Number.isNaN(idA) && Number.isNaN(idB)) return -1;
+                        if (Number.isNaN(idA) && !Number.isNaN(idB)) return 1;
+                        
+                        // Both are strings, sort alphabetically descending
+                        return (b.id || "").localeCompare(a.id || "");
+                    });
+                }
+                
                 const totalFilteredItems = filteredData.length;
+                
+                // Apply client-side pagination
                 const startIndex = (page - 1) * pengajuanPageSize;
                 const endIndex = startIndex + pengajuanPageSize;
                 const paginatedData = filteredData.slice(startIndex, endIndex);
@@ -395,11 +414,17 @@ export default function Page_MeninggalDunia() {
                 setLoadingPengajuan(false);
             }
         },
-        [isProdi, isWadir1, isFinance, isAdmin, userData, prodiKonsentrasi, buildApiParams, filterDataByRole, pengajuanPageSize, permission]
+        [isProdi, isWadir1, isFinance, isAdmin, userData, prodiKonsentrasi, filterDataByRole, pengajuanPageSize, permission]
     );
 
     const extractArrayFromResponse = useCallback((data) => {
-        if (!data || typeof data !== 'object') return data;
+        // Backend now returns array directly without wrapper
+        if (Array.isArray(data)) {
+            return data;
+        }
+        
+        // Fallback: check for common wrapper properties
+        if (!data || typeof data !== 'object') return [];
         
         const arrayProperties = ['data', 'items', 'result'];
         for (const prop of arrayProperties) {
@@ -408,10 +433,8 @@ export default function Page_MeninggalDunia() {
             }
         }
         
-        if (Array.isArray(data)) return data;
-        
-        const firstArrayProp = Object.keys(data).find(key => Array.isArray(data[key]));
-        return firstArrayProp ? data[firstArrayProp] : data;
+        // If no array found, return empty array
+        return [];
     }, []);
 
     const getWadir1Icon = useCallback((status) => {

@@ -1037,27 +1037,10 @@ export default function Page_MeninggalDunia() {
         setLoadingPengajuan(true);
 
         try {
-            let autoReason = "";
-            let backendRole = "";
-            
-            if (isProdi) {
-                autoReason = "Ditolak oleh Program Studi";
-                backendRole = "prodi";
-            } else if (isWadir1) {
-                autoReason = "Ditolak oleh Wakil Direktur 1";
-                backendRole = "wadir1";
-            } else if (isFinance) {
-                autoReason = "Ditolak oleh Bagian Keuangan";
-                backendRole = "finance";
-            } else {
-                autoReason = "Pengajuan ditolak";
-                backendRole = "prodi";
-            }
-
+            // Use the exact payload structure from your working curl
             const payload = {
-                username: userData?.nama || userData?.username || userData?.userid || "",
-                keterangan: autoReason,
-                role: backendRole
+                role: userData?.roleId || "",
+                username: userData?.nama || userData?.username || ""
             };
 
             const encodedItemId = encodeURIComponent(itemId);
@@ -1077,9 +1060,7 @@ export default function Page_MeninggalDunia() {
                     const errorMsg = errorData.message || errorData.error || errorData.details || `HTTP ${res.status}: ${res.statusText}`;
                     Toast.error(`Gagal menolak pengajuan: ${errorMsg}`);
                 } catch (parseError) {
-                    // Failed to parse error response JSON, use fallback error message
-                    if (parseError) { /* parseError handled by showing generic error */ }
-                    Toast.error(`Gagal menolak pengajuan: HTTP ${res.status}\n\n${errorText}`);
+                    Toast.error(`Gagal menolak pengajuan: HTTP ${res.status}\n\n${errorText} - Parse error: ${parseError.message}`);
                 }
                 return;
             }
@@ -1089,12 +1070,11 @@ export default function Page_MeninggalDunia() {
             try {
                 result = JSON.parse(raw);
             } catch (parseError) {
-                // Failed to parse reject response JSON
                 Toast.error(`Response server tidak valid: ${parseError.message}\n\n${raw}`);
                 return;
             }
 
-            if (result?.message?.includes("berhasil")) {
+            if (result?.message?.includes("Berhasil")) {
                 Toast.success(result.message);
                 loadPengajuan(1);
                 loadRiwayat(1);

@@ -364,7 +364,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     };
 
     if (isAdmin) {
-      rowData["SK Cuti Akademik"] = formatSKCutiAkademikColumn(currentStatus);
+      rowData["SK Cuti Akademik"] = formatSKCutiAkademikColumn(currentStatus, item.cak_id || item.id || item.idDisplay);
       rowData.Aksi = actions;
       rowData.Alignment = new Array(11).fill("center");
     } else {
@@ -375,16 +375,17 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     return rowData;
   }, [isAdmin, isMahasiswa]);
 
-  const formatSKCutiAkademikColumn = useCallback((currentStatus) => {
+  const formatSKCutiAkademikColumn = useCallback((currentStatus, id) => {
     if (isAdmin) {
       if (currentStatus === "Menunggu Upload SK") {
-        return "Print";
-      } else if (currentStatus === "Disetujui") {
-        return "DownloadSK";
+        // Return HTML button for Print since TableRow.js won't handle this column
+        return `<button type="button" class="btn px-1 py-0 text-primary" title="Cetak SK" onclick="window.handlePrintSK('${id}')">
+                  <i class="bi bi-printer"></i>
+                </button>`;
       }
-      return "-";
+      return "-";  // Show dash for other statuses
     }
-    return "-";
+    return "-";  // Show dash for non-admin
   }, [isAdmin]);
 
   const getProdiIcon = useCallback((status, item) => {
@@ -1526,6 +1527,18 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   };
 
   
+  // Setup global function for print button (run once)
+  useEffect(() => {
+    globalThis.handlePrintSK = (id) => {
+      handlePrint(id);
+    };
+
+    // Cleanup on unmount
+    return () => {
+      delete globalThis.handlePrintSK;
+    };
+  }, []); // Empty dependency array - run only once
+
   useEffect(() => {
     if (!ssoData) {
       Toast.error("Sesi habis. Silakan login kembali.");

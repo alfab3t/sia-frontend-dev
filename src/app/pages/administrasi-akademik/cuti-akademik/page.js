@@ -1298,19 +1298,11 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const [skFilePreview, setSKFilePreview] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
 
-  
-  const handleUploadSK = (id) => {
-    setSelectedCutiId(id);
-    setShowUploadModal(true);
-    setSelectedSKFile(null);
-    setSKFilePreview(null);
-  };
-
   const handleSKFileSelect = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/jpg', 'image/png'];
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
     if (!allowedTypes.includes(file.type)) {
       Toast.error("Format file tidak didukung. Gunakan PDF, JPG, JPEG, atau PNG.");
       return;
@@ -1705,7 +1697,6 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
                   onApprove={handleApprove}
                   onReject={handleReject}
                   onUpload={handleUpload}
-                  onUploadSK={handleUploadSK}
                   onPrint={handlePrint}
                   onDownloadSK={handleDownloadSK}
                   config={{
@@ -1887,12 +1878,12 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
                     type="file"
                     id="skFile"
                     className="form-control rounded-4 blue-element"
-                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    accept=".pdf,.jpg,.jpeg,.png"
                     onChange={handleSKFileSelect}
                     disabled={uploadLoading}
                   />
                   <small className="text-muted">
-                    Format yang didukung: PDF, DOC, DOCX, JPG, JPEG, PNG (Maksimal 10MB)
+                    Format yang didukung: PDF, JPG, JPEG, PNG (Maksimal 10MB)
                   </small>
                 </div>
 

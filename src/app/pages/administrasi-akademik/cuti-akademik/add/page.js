@@ -744,12 +744,12 @@ export default function AddCutiAkademik() {
               name="suratPernyataan"
               className="form-control rounded-4 blue-element"
               onChange={handleChange}
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+              accept=".pdf,.jpg,.jpeg,.png"
             />
             {errors.suratPernyataan && (
               <span className="fw-normal text-danger">{errors.suratPernyataan}</span>
             )}
-            <small className="text-muted">Format: PDF, DOC, DOCX, JPG, PNG (Max 10MB)</small>
+            <small className="text-muted">Format yang didukung: PDF, JPG, JPEG, PNG (Maksimal 10MB)</small>
           </div>
 
           <div className="col-lg-6">
@@ -763,9 +763,9 @@ export default function AddCutiAkademik() {
               name="lampiran"
               className="form-control rounded-4 blue-element"
               onChange={handleChange}
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+              accept=".pdf,.jpg,.jpeg,.png"
             />
-            <small className="text-muted">Format: PDF, DOC, DOCX, JPG, PNG (Max 10MB)</small>
+            <small className="text-muted">Format yang didukung: PDF, JPG, JPEG, PNG (Maksimal 10MB)</small>
           </div>
         </div>
 

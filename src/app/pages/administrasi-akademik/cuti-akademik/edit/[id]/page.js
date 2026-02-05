@@ -124,8 +124,6 @@ export default function EditCutiAkademikPage() {
       const maxSize = 10 * 1024 * 1024; 
       const allowedTypes = [
         'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'image/jpeg',
         'image/jpg',
         'image/png'
@@ -140,7 +138,7 @@ export default function EditCutiAkademikPage() {
       
       
       if (!allowedTypes.includes(file.type)) {
-        Toast.error(`Format file ${file.name} tidak didukung. Gunakan PDF, JPG, atau PNG.`);
+        Toast.error(`Format file ${file.name} tidak didukung. Gunakan PDF, JPG, JPEG, atau PNG.`);
         e.target.value = ''; 
         return;
       }
@@ -748,7 +746,7 @@ export default function EditCutiAkademikPage() {
             )}
             <small className="text-muted">File sebelumnya: {formData.oldSurat || "-"}</small>
             <br />
-            <small className="text-muted">Upload file baru jika ingin mengganti. Format: PDF, DOC, DOCX, JPG, PNG (Max 10MB)</small>
+            <small className="text-muted">Upload file baru jika ingin mengganti. Format yang didukung: PDF, JPG, JPEG, PNG (Maksimal 10MB)</small>
           </div>
 
           <div className="col-lg-6">
@@ -768,7 +766,7 @@ export default function EditCutiAkademikPage() {
             )}
             <small className="text-muted">File sebelumnya: {formData.oldLampiran || "-"}</small>
             <br />
-            <small className="text-muted">Upload file baru jika ingin mengganti. Format: PDF, DOC, DOCX, JPG, PNG (Max 10MB)</small>
+            <small className="text-muted">Upload file baru jika ingin mengganti. Format yang didukung: PDF, JPG, JPEG, PNG (Maksimal 10MB)</small>
           </div>
         </div>
 

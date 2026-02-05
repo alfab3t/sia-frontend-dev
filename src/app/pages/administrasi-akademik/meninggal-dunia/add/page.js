@@ -321,7 +321,6 @@ export default function AddMeninggalDunia() {
       const maxSize = 10 * 1024 * 1024; 
       const allowedTypes = [
         'application/pdf',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'image/jpeg',
         'image/jpg',
         'image/png'
@@ -334,7 +333,7 @@ export default function AddMeninggalDunia() {
       }
       
       if (!allowedTypes.includes(file.type)) {
-        Toast.error(`Format file ${file.name} tidak didukung. Gunakan PDF, JPG, atau PNG.`);
+        Toast.error(`Format file ${file.name} tidak didukung. Gunakan PDF, JPG, JPEG, atau PNG.`);
         e.target.value = ''; 
         return;
       }
@@ -513,7 +512,7 @@ export default function AddMeninggalDunia() {
               name="lampiranMeninggal"
               className="form-control rounded-4 blue-element"
               onChange={handleChange}
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+              accept=".pdf,.jpg,.jpeg,.png"
             />
             {errors.lampiranMeninggal && (
               <span className="fw-normal text-danger">{errors.lampiranMeninggal}</span>

@@ -51,7 +51,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const isProdi = roleId === "ROL71";
   const isWadir1 = roleId === "ROL999";
   const isFinance = roleId === "ROL01";
-  const isAdmin = roleId === "ROL21";
+  const isAdmin = roleId === "ROL74";
 
   const dataFilterSort = [
     { Value: "tanggal_desc", Text: "Tanggal Pengajuan [↓]" },
@@ -174,7 +174,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       statusFilter = "Belum Disetujui Finance";
       
     } else if (isAdmin) {
-      statusFilter = "Menunggu Upload SK";
+      // Admin can see all data, no status filter
       
     } 
 
@@ -224,9 +224,8 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   }, [prodiKonsentrasi]);
 
   const filterAdminData = useCallback((currentStatus) => {
-    return currentStatus === "Belum Disetujui Prodi" ||
-           currentStatus === "Belum Disetujui Wadir 1" ||
-           currentStatus === "Menunggu Upload SK";
+    // Admin can see all data except Draft (which is only for creators)
+    return currentStatus !== "Draft";
   }, []);
 
   const determineActions = useCallback((item, currentStatus, isDraft) => {
@@ -300,6 +299,14 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   }, []);
 
   const determineAdminActions = useCallback((currentStatus) => {
+    let actions = ["Detail"];
+    
+    // Admin can upload SK for items waiting for SK upload
+    if (currentStatus === "Menunggu Upload SK") {
+      actions.push("Upload");
+    }
+    
+    // Admin can upload SK for approved items
     const isAllApprovalsComplete = currentStatus && 
       !currentStatus.includes("Belum Disetujui Prodi") && 
       !currentStatus.includes("Belum Disetujui Wadir 1") && 
@@ -307,11 +314,18 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       !currentStatus.includes("Draft") &&
       !currentStatus.includes("Ditolak");
       
-    const isReadyForSK = currentStatus === "Menunggu Upload SK" || 
-                       currentStatus === "Disetujui" ||
-                       isAllApprovalsComplete;
+    const isReadyForSK = currentStatus === "Disetujui" || isAllApprovalsComplete;
     
-    return isReadyForSK ? ["Detail", "UploadSK"] : ["Detail"];
+    if (isReadyForSK) {
+      actions.push("UploadSK");
+    }
+    
+    // Admin can download SK for approved items
+    if (currentStatus === "Disetujui") {
+      actions.push("DownloadSK");
+    }
+    
+    return actions;
   }, []);
 
   const formatTableRow = useCallback((item, index, startIndex, currentStatus, actions) => {
@@ -363,7 +377,12 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
   const formatSKCutiAkademikColumn = useCallback((currentStatus) => {
     if (isAdmin) {
-      return currentStatus === "Menunggu Upload SK" ? "DownloadSK" : "-";
+      if (currentStatus === "Menunggu Upload SK") {
+        return "Print";
+      } else if (currentStatus === "Disetujui") {
+        return "DownloadSK";
+      }
+      return "-";
     }
     return "-";
   }, [isAdmin]);
@@ -508,8 +527,8 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         }
 
         let backendRole = roleId;
-        if (roleId === "ROL21") {
-          backendRole = "ROL21";
+        if (roleId === "ROL74") {
+          backendRole = "ROL74";
         }
 
         const params = buildMainDataParams(roleParams, backendRole);
@@ -1264,11 +1283,11 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   };
 
   const handleUpload = (id) => {
-    router.push(
-      `/pages/administrasi-akademik/cuti-akademik/upload/${encryptIdUrl(
-        id
-      )}`
-    );
+    // Use modal upload instead of redirecting to separate page
+    setSelectedCutiId(id);
+    setShowUploadModal(true);
+    setSelectedSKFile(null);
+    setSKFilePreview(null);
   };
 
 
@@ -1333,7 +1352,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       formData.append('FileSK', selectedSKFile);
       formData.append('UploadBy', userData?.nama || userData?.username || 'user_admin');
 
-      const response = await fetch(`${API_LINK}CutiAkademik/upload-sk`, {
+      const response = await fetch(`${API_LINK}CutiAkademik/UploadSKCutiAkademik`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${Cookies.get("jwtToken")}`

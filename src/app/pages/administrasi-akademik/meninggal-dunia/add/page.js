@@ -64,7 +64,6 @@ export default function AddMeninggalDunia() {
   const [mounted, setMounted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [studentList, setStudentList] = useState([]);
-  const [loadingStudents, setLoadingStudents] = useState(false);
   const [prodiKonsentrasi, setProdiKonsentrasi] = useState("");
 
   const mahasiswaRef = useRef();
@@ -119,7 +118,6 @@ export default function AddMeninggalDunia() {
 
   useEffect(() => {
     const loadStudents = async () => {
-      setLoadingStudents(true);
       try {
         // Always use the main endpoint without konId parameter
         const url = `${API_LINK}MeninggalDunia/GetMahasiswaDropdownForMeninggalDunia`;
@@ -256,8 +254,6 @@ export default function AddMeninggalDunia() {
         }
       } catch (error) {
         if (error) Toast.error("Terjadi kesalahan saat memuat daftar mahasiswa.");
-      } finally {
-        setLoadingStudents(false);
       }
     };
 
@@ -477,12 +473,8 @@ export default function AddMeninggalDunia() {
               value={formData.mhsId}
               onChange={handleStudentChange}
               isRequired={true}
-              isDisabled={loadingStudents}
               errorMessage={errors.mhsId}
             />
-            {loadingStudents && (
-              <small className="text-muted">Memuat daftar mahasiswa...</small>
-            )}
           </div>
         </div>
 

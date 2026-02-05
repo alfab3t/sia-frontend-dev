@@ -294,7 +294,7 @@ export default function Page_MeninggalDunia() {
         // Admin can upload SK for items waiting for SK upload
         if (currentStatus === "Menunggu Upload SK") {
             if (hasPermission(permission, "meninggal_dunia.edit")) {
-                actions.push("UploadSK");
+                actions.push("Upload");  // Use Upload instead of UploadSK
             }
         }
         
@@ -469,7 +469,13 @@ export default function Page_MeninggalDunia() {
         };
 
         if (isAdmin) {
-            const skColumn = currentStatus === "Menunggu Upload SK" ? "DownloadSK" : "-";
+            let skColumn = "-";
+            if (currentStatus === "Menunggu Upload SK") {
+                // Return HTML button for Print since TableRow.js won't handle this column
+                skColumn = `<button type="button" class="btn px-1 py-0 text-primary" title="Cetak SK" onclick="window.handlePrintMeninggalDunia('${item.id || item.mdu_id || item.idDisplay}')">
+                              <i class="bi bi-printer"></i>
+                            </button>`;
+            }
             tableData["SK Meninggal Dunia"] = skColumn;
             tableData.Aksi = actions;
             tableData.Alignment = new Array(9).fill("center");
@@ -675,7 +681,7 @@ export default function Page_MeninggalDunia() {
     const [spkbFilePreview, setSPKBFilePreview] = useState(null);
     const [uploadLoading, setUploadLoading] = useState(false);
 
-    const handleUploadSK = (id) => {
+    const handleUpload = (id) => {
         setSelectedMeninggalId(id);
         setShowUploadModal(true);
         setSelectedSKFile(null);
@@ -754,7 +760,7 @@ export default function Page_MeninggalDunia() {
             formData.append('MduId', selectedMeninggalId);
             formData.append('SK', selectedSKFile);
             formData.append('SKPB', selectedSPKBFile);
-            formData.append('ModifiedBy', userData?.nama || userData?.username || 'user_admin');
+            formData.append('ModifiedBy', userData?.nama || userData?.username || 'nda_admin');
 
             const response = await fetch(`${API_LINK}MeninggalDunia/UploadSKMeninggalDunia`, {
                 method: 'PUT',
@@ -763,12 +769,23 @@ export default function Page_MeninggalDunia() {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                const errorText = await response.text();
+                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                
+                try {
+                    const errorData = JSON.parse(errorText);
+                    errorMessage = errorData.message || errorMessage;
+                } catch (parseError) {
+                    // Use default error message if JSON parsing fails
+                    if (parseError) { /* parseError handled by using default message */ }
+                }
+                
+                throw new Error(errorMessage);
             }
 
             const result = await response.json();
 
-            Toast.success(result.message || "SK berhasil diupload!");
+            Toast.success(result.message || "Upload SK berhasil!");
             setShowUploadModal(false);
             setSelectedSKFile(null);
             setSelectedSPKBFile(null);
@@ -795,6 +812,57 @@ export default function Page_MeninggalDunia() {
         setSKFilePreview(null);
         setSPKBFilePreview(null);
         setSelectedMeninggalId(null);
+    };
+
+    const handlePrint = async (id) => {
+        try {
+            const username = userData?.nama || userData?.username || "";
+            
+            if (!username) {
+                Toast.error("Data user tidak lengkap. Silakan login ulang.");
+                return;
+            }
+
+            const params = new URLSearchParams({
+                username: username,
+                format: "pdf"
+            });
+
+            const printUrl = `${API_LINK}MeninggalDunia/PrintSKMeninggalDunia/${encodeURIComponent(id)}?${params.toString()}`;
+
+            const response = await fetch(printUrl, {
+                method: 'GET',
+                headers: getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    Toast.error("Sesi habis. Silakan login kembali.");
+                } else if (response.status === 403) {
+                    Toast.error("Anda tidak memiliki akses untuk mencetak SK ini.");
+                } else if (response.status === 404) {
+                    Toast.error("SK tidak ditemukan atau belum tersedia.");
+                } else {
+                    Toast.error(`Gagal mencetak SK: HTTP ${response.status}`);
+                }
+                return;
+            }
+
+            const blob = await response.blob();
+            const url = globalThis.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `SK_Meninggal_Dunia_${id}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            globalThis.URL.revokeObjectURL(url);
+            
+            Toast.success("SK berhasil dicetak!");
+
+        } catch (error) {
+            Toast.error(`Gagal mencetak SK: ${error.message}`);
+        }
     };
 
     const handleDownloadSK = async (id) => {
@@ -1219,6 +1287,18 @@ export default function Page_MeninggalDunia() {
     );
 
 
+    // Setup global function for print button (run once)
+    useEffect(() => {
+        globalThis.handlePrintMeninggalDunia = (id) => {
+            handlePrint(id);
+        };
+
+        // Cleanup on unmount
+        return () => {
+            delete globalThis.handlePrintMeninggalDunia;
+        };
+    }, []); // Empty dependency array - run only once
+
     useEffect(() => {
         if (!ssoData) {
             Toast.error("Sesi habis. Silakan login kembali.");
@@ -1313,7 +1393,7 @@ export default function Page_MeninggalDunia() {
                                         onSent={handleAjukan}
                                         onApprove={handleApprove}
                                         onReject={handleReject}
-                                        onUploadSK={handleUploadSK}
+                                        onUpload={handleUpload}
                                         onDownloadSK={handleDownloadSK}
                                         config={{
                                             statusBadgeMap: {

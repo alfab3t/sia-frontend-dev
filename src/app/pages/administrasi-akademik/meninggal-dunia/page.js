@@ -40,7 +40,7 @@ function useUserRoles(userData, permission) {
         const isProdi = roleId === "ROL71";
         const isWadir1 = roleId === "ROL999";
         const isFinance = roleId === "ROL01";
-        const isAdmin = roleId === "ROL21";
+        const isAdmin = roleId === "ROL74";
         
         return { isProdi, isFinance, isWadir1, isAdmin };
     }, [userData, permission]);
@@ -171,13 +171,16 @@ export default function Page_MeninggalDunia() {
     const pengajuanPageSize = 10;
 
     const filterDataByRole = useCallback((data, roles, prodiKonsentrasi) => {
-        const { isProdi } = roles;
+        const { isProdi, isAdmin } = roles;
         
         return data.filter(item => {
             const currentStatus = item.status || item.mdu_status || "";
             
             if (isProdi) {
                 return filterProdiData(item, currentStatus, prodiKonsentrasi);
+            } else if (isAdmin) {
+                // Admin can see all data except Draft (which belongs to creators)
+                return currentStatus !== "Draft";
             } else {
                 return currentStatus !== "Disetujui";
             }
@@ -288,22 +291,24 @@ export default function Page_MeninggalDunia() {
     const determineAdminActions = useCallback((currentStatus, hasUploadedSK, permission) => {
         let actions = [];
         
-        const isAllApprovalsComplete = currentStatus && 
-            !currentStatus.includes("Belum Disetujui Prodi") && 
-            !currentStatus.includes("Belum Disetujui Wadir 1") && 
-            !currentStatus.includes("Belum Disetujui Finance") &&
-            !currentStatus.includes("Draft") &&
-            !currentStatus.includes("Ditolak");
-            
-        const isReadyForSK = currentStatus === "Menunggu Upload SK" || 
-                           currentStatus === "Disetujui" ||
-                           isAllApprovalsComplete;
-        
-        if (isReadyForSK) {
-            if (hasUploadedSK && hasPermission(permission, "meninggal_dunia.print")) {
-                actions.push("DownloadSK");
-            } else if (!hasUploadedSK && hasPermission(permission, "meninggal_dunia.edit")) {
+        // Admin can upload SK for items waiting for SK upload
+        if (currentStatus === "Menunggu Upload SK") {
+            if (hasPermission(permission, "meninggal_dunia.edit")) {
                 actions.push("UploadSK");
+            }
+        }
+        
+        // Admin can download SK for approved items
+        if (currentStatus === "Disetujui" && hasUploadedSK) {
+            if (hasPermission(permission, "meninggal_dunia.print")) {
+                actions.push("DownloadSK");
+            }
+        }
+        
+        // Admin can print for approved items
+        if (currentStatus === "Disetujui") {
+            if (hasPermission(permission, "meninggal_dunia.print")) {
+                actions.push("Print");
             }
         }
         

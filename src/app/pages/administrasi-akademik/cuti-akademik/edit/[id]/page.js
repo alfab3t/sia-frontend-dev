@@ -430,20 +430,46 @@ export default function EditCutiAkademikPage() {
 
   useEffect(() => {
     if ((isProdi || isMahasiswa) && formData.angkatan) {
-      const newTahunAkademikData = generateTahunAkademik(formData.angkatan);
-      setTahunAjaranData(newTahunAkademikData);
+      // Untuk halaman edit, hanya tampilkan tahun akademik yang sedang diedit
+      if (formData.tahunAjaran) {
+        // Jika sudah ada tahun ajaran dari data yang diedit, hanya tampilkan itu saja
+        setTahunAjaranData([{
+          Value: formData.tahunAjaran,
+          Text: formData.tahunAjaran
+        }]);
+      } else {
+        // Jika belum ada, generate seperti biasa (fallback)
+        const newTahunAkademikData = generateTahunAkademik(formData.angkatan);
+        setTahunAjaranData(newTahunAkademikData);
+      }
     } else if (!isProdi && !isMahasiswa) {
-      const defaultTahunAkademik = generateTahunAkademik(null);
-      setTahunAjaranData(defaultTahunAkademik);
+      // Untuk role lain, jika sudah ada tahun ajaran, hanya tampilkan itu saja
+      if (formData.tahunAjaran) {
+        setTahunAjaranData([{
+          Value: formData.tahunAjaran,
+          Text: formData.tahunAjaran
+        }]);
+      } else {
+        const defaultTahunAkademik = generateTahunAkademik(null);
+        setTahunAjaranData(defaultTahunAkademik);
+      }
     }
-  }, [formData.angkatan, isProdi, isMahasiswa]);
+  }, [formData.angkatan, formData.tahunAjaran, isProdi, isMahasiswa]);
 
   useEffect(() => {
     if (!isProdi && !isMahasiswa) {
-      const defaultTahunAkademik = generateTahunAkademik(null);
-      setTahunAjaranData(defaultTahunAkademik);
+      // Untuk role lain, jika sudah ada tahun ajaran, hanya tampilkan itu saja
+      if (formData.tahunAjaran) {
+        setTahunAjaranData([{
+          Value: formData.tahunAjaran,
+          Text: formData.tahunAjaran
+        }]);
+      } else {
+        const defaultTahunAkademik = generateTahunAkademik(null);
+        setTahunAjaranData(defaultTahunAkademik);
+      }
     }
-  }, [isProdi, isMahasiswa]);
+  }, [isProdi, isMahasiswa, formData.tahunAjaran]);
 
   useEffect(() => {
     if (!realId) {
@@ -672,81 +698,35 @@ export default function EditCutiAkademikPage() {
 
         <div className="row mt-3">
           <div className="col-lg-6">
-            {isClient && (isProdi || isMahasiswa) ? (
-              <DropDown
-                ref={tahunAjaranRef}
-                forInput="tahunAjaran"
-                label="Tahun Akademik Mulai Cuti"
-                type="pilih"
-                arrData={tahunAjaranData}
-                value={formData.tahunAjaran}
-                onChange={handleChange}
-                isRequired={true}
-                errorMessage={errors.tahunAjaran}
-                isDisabled={(isProdi && !formData.mhsId) || (isMahasiswa && !formData.angkatan)}
-              />
-            ) : (
-              <>
-                <Label
-                  text="Tahun Akademik"
-                  htmlFor="tahunAjaran"
-                  required={true}
-                />
-                <select
-                  className="form-control rounded-4 blue-element"
-                  name="tahunAjaran"
-                  value={formData.tahunAjaran}
-                  onChange={handleChange}
-                >
-                  <option value="">— Pilih Tahun Akademik —</option>
-                  <option value="2024/2025">2024/2025</option>
-                  <option value="2025/2026">2025/2026</option>
-                </select>
-                {errors.tahunAjaran && (
-                  <span className="fw-normal text-danger">{errors.tahunAjaran}</span>
-                )}
-              </>
-            )}
+            <DropDown
+              ref={tahunAjaranRef}
+              forInput="tahunAjaran"
+              label="Tahun Akademik Mulai Cuti"
+              type="pilih"
+              arrData={tahunAjaranData}
+              value={formData.tahunAjaran}
+              onChange={handleChange}
+              isRequired={true}
+              errorMessage={errors.tahunAjaran}
+              isDisabled={(isProdi && !formData.mhsId) || (isMahasiswa && !formData.angkatan)}
+            />
             {isClient && isMahasiswa && !formData.angkatan && (
               <small className="text-muted">Memuat opsi tahun akademik...</small>
             )}
           </div>
 
           <div className="col-lg-6">
-            {isClient && (isProdi || isMahasiswa) ? (
-              <DropDown
-                ref={semesterRef}
-                forInput="semester"
-                label="Semester Mulai Cuti"
-                type="pilih"
-                arrData={semesterData}
-                value={formData.semester}
-                onChange={handleChange}
-                isRequired={true}
-                errorMessage={errors.semester}
-              />
-            ) : (
-              <>
-                <Label
-                  text="Semester"
-                  htmlFor="semester"
-                  required={true}
-                />
-                <select
-                  className="form-control rounded-4 blue-element"
-                  name="semester"
-                  value={formData.semester}
-                  onChange={handleChange}
-                >
-                  <option value="">— Pilih Semester —</option>
-                  <option value="Ganjil">Ganjil</option>
-                  <option value="Genap">Genap</option>
-                </select>
-                {errors.semester && (
-                  <span className="fw-normal text-danger">{errors.semester}</span>
-                )}
-              </>
-            )}
+            <DropDown
+              ref={semesterRef}
+              forInput="semester"
+              label="Semester Mulai Cuti"
+              type="pilih"
+              arrData={semesterData}
+              value={formData.semester}
+              onChange={handleChange}
+              isRequired={true}
+              errorMessage={errors.semester}
+            />
           </div>
         </div>
 

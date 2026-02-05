@@ -1333,14 +1333,7 @@ export default function Page_MeninggalDunia() {
                     { label: "Administrasi Akademik" },
                     { label: "Meninggal Dunia" },
                 ]}
-            >
-                <div className="text-center py-4">
-                    <output className="spinner-border" aria-live="polite" aria-label="Loading">
-                        <span className="visually-hidden">Loading...</span>
-                    </output>
-                    <p className="mt-2">Memuat halaman...</p>
-                </div>
-            </MainContent>
+            />
         );
     }
 
@@ -1374,14 +1367,7 @@ export default function Page_MeninggalDunia() {
 
                     {(() => {
                         if (loadingPengajuan) {
-                            return (
-                                <div className="text-center py-4">
-                                    <output className="spinner-border" aria-live="polite" aria-label="Loading data pengajuan">
-                                        <span className="visually-hidden">Loading...</span>
-                                    </output>
-                                    <p className="mt-2">Memuat data pengajuan...</p>
-                                </div>
-                            );
+                            return null; // Loading handled by MainContent
                         } else if (dataPengajuan.length > 0) {
                             return (
                                 <>
@@ -1462,14 +1448,7 @@ export default function Page_MeninggalDunia() {
 
                     {(() => {
                         if (loadingRiwayat) {
-                            return (
-                                <div className="text-center py-4">
-                                    <output className="spinner-border" aria-live="polite" aria-label="Loading data riwayat">
-                                        <span className="visually-hidden">Loading...</span>
-                                    </output>
-                                    <p className="mt-2">Memuat data riwayat...</p>
-                                </div>
-                            );
+                            return null; // Loading handled by MainContent
                         } else if (dataRiwayat.length > 0) {
                             return (
                                 <>

@@ -433,20 +433,14 @@ export default function AddMeninggalDunia() {
       <MainContent
         title="Tambah Pengajuan Meninggal Dunia"
         layout="Admin"
+        loading={true}
         breadcrumb={[
           { label: "Sistem Informasi Akademik" },
           { label: "Administrasi Akademik" },
           { label: "Meninggal Dunia" },
           { label: "Tambah Pengajuan" },
         ]}
-      >
-        <div className="text-center py-4">
-          <div className="spinner-border" aria-live="polite" aria-label="Loading">
-            <span className="visually-hidden">Loading...</span>
-          </div>
-          <p className="mt-2">Memuat halaman...</p>
-        </div>
-      </MainContent>
+      />
     );
   }
 
@@ -525,7 +519,7 @@ export default function AddMeninggalDunia() {
               <span className="fw-normal text-danger">{errors.lampiranMeninggal}</span>
             )}
             <small className="text-muted">
-              Format yang didukung: PDF, DOC, DOCX, JPG, JPEG, PNG (Maksimal 10MB)
+              Format yang didukung: PDF, JPG, JPEG, PNG (Maksimal 10MB)
             </small>
           </div>
         </div>

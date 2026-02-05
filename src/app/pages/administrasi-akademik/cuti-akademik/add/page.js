@@ -704,78 +704,31 @@ export default function AddCutiAkademik() {
 
         <div className="row mt-3">
           <div className="col-lg-6">
-            {isClient && (isProdi || isMahasiswa) ? (
-              <DropDown
-                ref={tahunAjaranRef}
-                forInput="tahunAjaran"
-                label="Tahun Akademik Mulai Cuti"
-                type="pilih"
-                arrData={tahunAjaranData}
-                value={formData.tahunAjaran}
-                onChange={handleChange}
-                isRequired={true}
-                errorMessage={errors.tahunAjaran}
-                isDisabled={isMahasiswa && !formData.angkatan}
-              />
-            ) : (
-              <>
-                <Label
-                  text="Tahun Akademik"
-                  htmlFor="tahunAjaran"
-                  required={true}
-                />
-                <select
-                  name="tahunAjaran"
-                  className="form-control rounded-4 blue-element"
-                  onChange={handleChange}
-                  value={formData.tahunAjaran}
-                >
-                  <option value="">— Pilih Tahun Akademik —</option>
-                  <option value="2024/2025">2024/2025</option>
-                  <option value="2025/2026">2025/2026</option>
-                </select>
-                {errors.tahunAjaran && (
-                  <span className="fw-normal text-danger">{errors.tahunAjaran}</span>
-                )}
-              </>
-            )}
+            <DropDown
+              ref={tahunAjaranRef}
+              forInput="tahunAjaran"
+              label="Tahun Akademik Mulai Cuti"
+              type="pilih"
+              arrData={tahunAjaranData}
+              value={formData.tahunAjaran}
+              onChange={handleChange}
+              isRequired={true}
+              errorMessage={errors.tahunAjaran}
+            />
           </div>
 
           <div className="col-lg-6">
-            {isClient && (isProdi || isMahasiswa) ? (
-              <DropDown
-                ref={semesterRef}
-                forInput="semester"
-                label="Semester Mulai Cuti"
-                type="pilih"
-                arrData={semesterData}
-                value={formData.semester}
-                onChange={handleChange}
-                isRequired={true}
-                errorMessage={errors.semester}
-              />
-            ) : (
-              <>
-                <Label
-                  text="Semester"
-                  htmlFor="semester"
-                  required={true}
-                />
-                <select
-                  name="semester"
-                  className="form-control rounded-4 blue-element"
-                  onChange={handleChange}
-                  value={formData.semester}
-                >
-                  <option value="">— Pilih Semester —</option>
-                  <option value="Ganjil">Ganjil</option>
-                  <option value="Genap">Genap</option>
-                </select>
-                {errors.semester && (
-                  <span className="fw-normal text-danger">{errors.semester}</span>
-                )}
-              </>
-            )}
+            <DropDown
+              ref={semesterRef}
+              forInput="semester"
+              label="Semester Mulai Cuti"
+              type="pilih"
+              arrData={semesterData}
+              value={formData.semester}
+              onChange={handleChange}
+              isRequired={true}
+              errorMessage={errors.semester}
+            />
           </div>
         </div>
 

@@ -4,7 +4,6 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import MainContent from "@/components/layout/MainContent";
 import Toast from "@/components/common/Toast";
 import Button from "@/components/common/Button";
-import DropDown from "@/components/common/Dropdown";
 import Label from "@/components/common/Label";
 import Input from "@/components/common/Input";
 import { useRouter } from "next/navigation";
@@ -76,6 +75,11 @@ export default function AddMeninggalDunia() {
   });
 
   const [errors, setErrors] = useState({});
+  
+  // State untuk dropdown search mahasiswa
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [searchMahasiswa, setSearchMahasiswa] = useState("");
+  const [filteredStudentList, setFilteredStudentList] = useState([]);
 
   useEffect(() => {
     setMounted(true);
@@ -125,7 +129,7 @@ export default function AddMeninggalDunia() {
     };
   };
 
-  const extractAngkatan = (mhsId, index) => {
+  const extractAngkatan = (mhsId) => {
     if (mhsId && mhsId.length >= 4) {
       const nimYear = mhsId.substring(0, 4);
       if (/^\d{4}$/.test(nimYear)) {
@@ -138,7 +142,7 @@ export default function AddMeninggalDunia() {
   const transformFilteredStudent = (item, index) => {
     const mhsId = item.mhsId || `mhs_${index}_${Date.now()}`;
     const mhsNama = item.mhsNama || `Student ${index}`;
-    const angkatan = extractAngkatan(mhsId, index);
+    const angkatan = extractAngkatan(mhsId);
     
     return {
       value: mhsId,
@@ -171,7 +175,7 @@ export default function AddMeninggalDunia() {
     
     let angkatan = item.angkatan || "";
     if (!angkatan && uniqueValue && uniqueValue.length >= 4) {
-      angkatan = extractAngkatan(uniqueValue, index);
+      angkatan = extractAngkatan(uniqueValue);
     }
     
     return {
@@ -260,18 +264,39 @@ export default function AddMeninggalDunia() {
     loadStudents();
   }, [isProdi, prodiKonsentrasi]);
 
-  const handleStudentChange = async (e) => {
-    const mhsId = e.target.value;
-    
-    if (!mhsId) {
-      setFormData(prev => ({
-        ...prev,
-        mhsId: "",
-        prodi: "",
-        tahunAngkatan: ""
-      }));
-      return;
+  // Update filtered list ketika studentList berubah
+  useEffect(() => {
+    setFilteredStudentList(studentList);
+  }, [studentList]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (mahasiswaRef.current && !mahasiswaRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    };
+
+    if (showDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
     }
+  }, [showDropdown]);
+
+  const handleStudentSelect = async (mhsId) => {
+    setFormData(prev => ({
+      ...prev,
+      mhsId: mhsId,
+      prodi: "",
+      tahunAngkatan: ""
+    }));
+
+    setShowDropdown(false);
+    setSearchMahasiswa("");
+
+    if (!mhsId) return;
 
     try {
       // Use only GetMahasiswaDetailForMeninggalDunia endpoint
@@ -291,23 +316,9 @@ export default function AddMeninggalDunia() {
           tahunAngkatan: data.mhsAngkatan || ""
         }));
       } else {
-        // If API fails, set basic data
-        setFormData(prev => ({
-          ...prev,
-          mhsId: mhsId,
-          prodi: "",
-          tahunAngkatan: ""
-        }));
         Toast.error("Gagal memuat detail mahasiswa.");
       }
     } catch (error) {
-      // If error occurs, set basic data
-      setFormData(prev => ({
-        ...prev,
-        mhsId: mhsId,
-        prodi: "",
-        tahunAngkatan: ""
-      }));
       Toast.error(`Terjadi kesalahan saat memuat detail mahasiswa: ${error.message || error}`);
     }
   };
@@ -456,17 +467,164 @@ export default function AddMeninggalDunia() {
       <form onSubmit={handleSubmit}>
         <div className="row mt-3">
           <div className="col-lg-12">
-            <DropDown
-              ref={mahasiswaRef}
-              forInput="mhsId"
-              label="Mahasiswa"
-              type="pilih"
-              arrData={studentList}
-              value={formData.mhsId}
-              onChange={handleStudentChange}
-              isRequired={true}
-              errorMessage={errors.mhsId}
+            <Label
+              required={true}
+              text="Mahasiswa"
+              htmlFor="mhsId"
+              tooltip="Mahasiswa"
             />
+            <div style={{ position: 'relative' }} ref={mahasiswaRef}>
+              {/* Dropdown Button */}
+              <button
+                type="button"
+                className="form-select rounded-4 text-start"
+                onClick={() => {
+                  setShowDropdown(!showDropdown);
+                }}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: '#e8eaf6',
+                  borderColor: '#d1d5e8',
+                  color: '#5f6368',
+                }}
+              >
+                <span style={{ color: formData.mhsId ? '#5f6368' : '#9e9e9e' }}>
+                  {formData.mhsId 
+                    ? studentList.find(s => s.Value === formData.mhsId)?.Text || '-- Pilih Mahasiswa --'
+                    : '-- Pilih Mahasiswa --'
+                  }
+                </span>
+              </button>
+
+              {/* Dropdown Menu */}
+              {showDropdown && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    zIndex: 1000,
+                    backgroundColor: 'white',
+                    border: '1px solid #ced4da',
+                    borderRadius: '0.375rem',
+                    marginTop: '2px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    maxHeight: '300px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  {/* Search Input */}
+                  <div
+                    style={{
+                      padding: '0.5rem',
+                      borderBottom: '1px solid #dee2e6',
+                      backgroundColor: 'white',
+                    }}
+                  >
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Cari mahasiswa..."
+                      value={searchMahasiswa}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setSearchMahasiswa(value);
+                        if (value.trim() === "") {
+                          setFilteredStudentList(studentList);
+                        } else {
+                          setFilteredStudentList(
+                            studentList.filter(student => 
+                              student.Text.toLowerCase().includes(value.toLowerCase())
+                            )
+                          );
+                        }
+                      }}
+                      autoFocus
+                      style={{ fontSize: '0.9rem', backgroundColor: '#f0f4ff' }}
+                    />
+                  </div>
+
+                  {/* List Items */}
+                  <div style={{ 
+                    overflowY: 'auto', 
+                    maxHeight: '250px',
+                    scrollbarWidth: 'none', /* Firefox */
+                    msOverflowStyle: 'none', /* IE and Edge */
+                  }}
+                  className="hide-scrollbar"
+                  >
+                    <style jsx>{`
+                      .hide-scrollbar::-webkit-scrollbar {
+                        display: none;
+                      }
+                    `}</style>
+                    <div
+                      style={{
+                        padding: '0.5rem 0.75rem',
+                        color: '#6c757d',
+                        backgroundColor: '#e9ecef',
+                        borderBottom: '1px solid #dee2e6',
+                        fontSize: '0.95rem',
+                      }}
+                    >
+                      -- Pilih Mahasiswa --
+                    </div>
+                    {filteredStudentList && filteredStudentList.length > 0 ? (
+                      filteredStudentList.map((student) => (
+                        <button
+                          key={student.Value}
+                          type="button"
+                          onClick={() => handleStudentSelect(student.Value)}
+                          style={{
+                            width: '100%',
+                            padding: '0.5rem 0.75rem',
+                            cursor: 'pointer',
+                            backgroundColor: formData.mhsId === student.Value ? '#e3f2fd' : 'white',
+                            border: 'none',
+                            borderBottom: '1px solid #f0f0f0',
+                            fontSize: '0.95rem',
+                            textAlign: 'left',
+                            color: '#212529',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (formData.mhsId !== student.Value) {
+                              e.currentTarget.style.backgroundColor = '#f8f9fa';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (formData.mhsId !== student.Value) {
+                              e.currentTarget.style.backgroundColor = 'white';
+                            }
+                          }}
+                        >
+                          {student.Text}
+                        </button>
+                      ))
+                    ) : (
+                      <div
+                        style={{
+                          padding: '0.5rem 0.75rem',
+                          color: '#6c757d',
+                          fontSize: '0.95rem',
+                        }}
+                      >
+                        {studentList && studentList.length > 0 
+                          ? 'Tidak ada data ditemukan' 
+                          : 'Memuat data mahasiswa...'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            {errors.mhsId && (
+              <span className="fw-normal text-danger">{errors.mhsId}</span>
+            )}
           </div>
         </div>
 

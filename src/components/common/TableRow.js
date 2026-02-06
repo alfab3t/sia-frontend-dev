@@ -230,7 +230,8 @@ export default function TableRow({
             cell = <span className="text-muted small"></span>;
           }
         } else if (col === "Status") {
-          cell = <Badge status={row[col]} />;
+          const statusBadgeMap = config?.statusBadgeMap || {};
+          cell = <Badge status={row[col]} customMap={statusBadgeMap} />;
         } else if (col === "Aksi") {
           cell = renderAction(row[col], row.id, row.Status);
         } else if (typeof row[col] === "string") {

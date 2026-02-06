@@ -1585,7 +1585,7 @@ export default function Page_MeninggalDunia() {
                         onSearch={handleSearchRiwayat}
                         onFilter={handleRiwayatFilter}
                         onExport={handleExportExcel}
-                        searchPlaceholder="Cari No. Pengajuan, NIM, Nama, atau Prodi"
+                        searchPlaceholder=""
                         showAddButton={false}
                         showFilterButton={true}
                         showExportButton={hasPermission(permission, "meninggal_dunia.export")}

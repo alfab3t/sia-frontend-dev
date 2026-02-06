@@ -1844,7 +1844,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
                 Toast.error(`Gagal export Excel: ${error.message}`);
               }
             }}
-            searchPlaceholder="Cari No. Pengajuan, NIM, Nama, atau Prodi"
+            searchPlaceholder=""
             showAddButton={false}
             showFilterButton={true}
             showExportButton={true}

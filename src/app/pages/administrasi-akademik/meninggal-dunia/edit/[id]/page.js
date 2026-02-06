@@ -130,7 +130,7 @@ export default function EditMeninggalDunia() {
       }
       
       if (!allowedTypes.includes(file.type)) {
-        Toast.error(`Format file ${file.name} tidak didukung. Gunakan PDF, DOC, DOCX, JPG, atau PNG.`);
+        Toast.error(`Format file ${file.name} tidak didukung. Gunakan PDF, JPG, atau PNG.`);
         e.target.value = '';
         return;
       }

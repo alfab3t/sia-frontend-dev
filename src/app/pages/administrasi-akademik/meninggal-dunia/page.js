@@ -143,7 +143,7 @@ export default function Page_MeninggalDunia() {
                         
                         if (data && data.length > 0) {
                             const konsentrasiName = data[0].nama || "";
-                            const cleanName = konsentrasiName.replace(/\s*\([^)]*\)\s*$/, '').trim();
+                            const cleanName = konsentrasiName.replaceAll(/\s*\([^)]*\)\s*$/g, '').trim();
                             setProdiKonsentrasi(cleanName);
                         }
                     }
@@ -204,8 +204,8 @@ export default function Page_MeninggalDunia() {
                 (userProgram.includes('(') && userProgram.includes(')') && 
                  itemProgram.includes(userProgram.match(/\(([^)]+)\)/)?.[1]?.toLowerCase() || '')) ||
                 // Match without parentheses content
-                itemProgram.replace(/\s*\([^)]*\)\s*$/, '').trim() === 
-                userProgram.replace(/\s*\([^)]*\)\s*$/, '').trim();
+                itemProgram.replaceAll(/\s*\([^)]*\)\s*$/g, '').trim() === 
+                userProgram.replaceAll(/\s*\([^)]*\)\s*$/g, '').trim();
             
             if (!programMatches) {
                 return false;
@@ -545,6 +545,58 @@ export default function Page_MeninggalDunia() {
         loadProgramStudiList();
     }, []);
 
+    // Helper function to normalize text for search
+    const normalizeTextForSearch = useCallback((text) => {
+        return String(text)
+            .toLowerCase()
+            .replaceAll(/[^\w\s]/g, '')
+            .replaceAll(/\s+/g, ' ')
+            .trim();
+    }, []);
+
+    // Helper function to check if search term matches fields
+    const checkSearchMatch = useCallback((normalizedFields, normalizedSearchTerm) => {
+        // Check if any field contains the search term
+        const fieldMatch = normalizedFields.some(field => 
+            field.includes(normalizedSearchTerm)
+        );
+        
+        if (fieldMatch) return true;
+        
+        // Check combined text for multi-word searches
+        const combinedText = normalizedFields.join(' ');
+        if (combinedText.includes(normalizedSearchTerm)) return true;
+        
+        // Check for partial matches in each word
+        const searchWords = normalizedSearchTerm.split(' ').filter(w => w.length > 0);
+        return searchWords.every(word => 
+            normalizedFields.some(field => field.includes(word))
+        );
+    }, []);
+
+    // Helper function for accurate search filtering
+    const applyAccurateSearchFilter = useCallback((data, searchTerm) => {
+        if (!searchTerm || searchTerm.trim() === "") return data;
+        
+        const normalizedSearchTerm = normalizeTextForSearch(searchTerm);
+        
+        return data.filter(item => {
+            const searchableFields = [
+                String(item["No Pengajuan"] || item.noPengajuan || item.id || ""),
+                String(item["Tanggal Pengajuan"] || item.tanggalPengajuan || ""),
+                String(item["Nomor SK"] || item.nomorSK || ""),
+                String(item.NIM || item.nim || ""),
+                String(item["Nama Mahasiswa"] || item.namaMahasiswa || ""),
+                String(item.Prodi || item.prodi || ""),
+                String(item.Status || item.status || "")
+            ];
+            
+            const normalizedFields = searchableFields.map(field => normalizeTextForSearch(field));
+            
+            return checkSearchMatch(normalizedFields, normalizedSearchTerm);
+        });
+    }, [normalizeTextForSearch, checkSearchMatch]);
+
     const loadRiwayat = useCallback(
         async (page = 1, keyword = riwayatSearch, sort = filterSort, prodi = filterProdi) => {
             try {
@@ -621,11 +673,16 @@ export default function Page_MeninggalDunia() {
                             (userProgram.includes('(') && userProgram.includes(')') && 
                              itemProgram.includes(userProgram.match(/\(([^)]+)\)/)?.[1]?.toLowerCase() || '')) ||
                             // Match without parentheses content
-                            itemProgram.replace(/\s*\([^)]*\)\s*$/, '').trim() === 
-                            userProgram.replace(/\s*\([^)]*\)\s*$/, '').trim();
+                            itemProgram.replaceAll(/\s*\([^)]*\)\s*$/g, '').trim() === 
+                            userProgram.replaceAll(/\s*\([^)]*\)\s*$/g, '').trim();
                         
                         return programMatches;
                     });
+                }
+
+                // Apply accurate client-side search filter
+                if (keyword && keyword.trim() !== "") {
+                    actualData = applyAccurateSearchFilter(actualData, keyword);
                 }
 
                 // Client-side pagination since backend doesn't handle it properly
@@ -669,7 +726,7 @@ export default function Page_MeninggalDunia() {
                 setLoadingRiwayat(false);
             }
         },
-        [userData, riwayatSearch, filterSort, filterProdi, riwayatPageSize, extractArrayFromResponse, isProdi, prodiKonsentrasi]
+        [userData, riwayatSearch, filterSort, filterProdi, riwayatPageSize, extractArrayFromResponse, isProdi, prodiKonsentrasi, applyAccurateSearchFilter]
     );
 
 

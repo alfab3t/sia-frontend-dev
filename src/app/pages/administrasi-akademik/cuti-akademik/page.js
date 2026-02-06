@@ -726,10 +726,39 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     };
   }, [fetchMissingData, generateSKNumber]);
 
+  // Helper function to normalize text for search
+  const normalizeText = useCallback((text) => {
+    return String(text)
+      .toLowerCase()
+      .replaceAll(/[^\w\s]/g, '')
+      .replaceAll(/\s+/g, ' ')
+      .trim();
+  }, []);
+
+  // Helper function to check if search term matches fields
+  const matchesSearchTerm = useCallback((normalizedFields, normalizedSearchTerm) => {
+    // Check if any field contains the search term
+    const fieldMatch = normalizedFields.some(field => 
+      field.includes(normalizedSearchTerm)
+    );
+    
+    if (fieldMatch) return true;
+    
+    // Check combined text for multi-word searches
+    const combinedText = normalizedFields.join(' ');
+    if (combinedText.includes(normalizedSearchTerm)) return true;
+    
+    // Check for partial matches in each word
+    const searchWords = normalizedSearchTerm.split(' ').filter(w => w.length > 0);
+    return searchWords.every(word => 
+      normalizedFields.some(field => field.includes(word))
+    );
+  }, []);
+
   const applySearchFilter = useCallback((data, searchTerm) => {
     if (!searchTerm || searchTerm.trim() === "") return data;
     
-    const normalizedSearchTerm = searchTerm.toLowerCase().trim();
+    const normalizedSearchTerm = normalizeText(searchTerm);
     
     return data.filter(item => {
       const searchableFields = [
@@ -741,20 +770,11 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         String(item.Prodi || "")
       ];
       
-      const searchableText = searchableFields
-        .join(" ")
-        .toLowerCase()
-        .replaceAll(/\s+/g, " ")
-        .trim();
+      const normalizedFields = searchableFields.map(field => normalizeText(field));
       
-      const isMatch = searchableText.includes(normalizedSearchTerm);
-      const exactFieldMatch = searchableFields.some(field => 
-        String(field).toLowerCase().includes(normalizedSearchTerm)
-      );
-      
-      return isMatch || exactFieldMatch;
+      return matchesSearchTerm(normalizedFields, normalizedSearchTerm);
     });
-  }, []);
+  }, [normalizeText, matchesSearchTerm]);
 
   const applyProdiFilter = useCallback((data, prodiFilter) => {
     if (!prodiFilter || prodiFilter.trim() === "") return data;

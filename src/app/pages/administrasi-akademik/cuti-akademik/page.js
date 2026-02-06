@@ -781,7 +781,36 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     
     return data.filter(item => {
       const itemProdi = String(item.Prodi || "").trim();
-      return itemProdi === prodiFilter;
+      const filterProdi = prodiFilter.trim();
+      
+      // Exact match
+      if (itemProdi === filterProdi) return true;
+      
+      // Check if item contains filter (e.g., "Manajemen Informatika (MI)" contains "Manajemen Informatika")
+      if (itemProdi.includes(filterProdi)) return true;
+      
+      // Check if filter contains item
+      if (filterProdi.includes(itemProdi)) return true;
+      
+      // Extract name without prefix and suffix for comparison
+      // Remove D3/D4 prefix and (XX) suffix from both
+      const cleanFilter = filterProdi
+        .replaceAll(/^D[34]\s+/gi, '') // Remove D3 or D4 prefix
+        .replaceAll(/\s*\([^)]*\)\s*$/g, '') // Remove (XX) suffix
+        .trim();
+      
+      const cleanItem = itemProdi
+        .replaceAll(/^D[34]\s+/gi, '')
+        .replaceAll(/\s*\([^)]*\)\s*$/g, '')
+        .trim();
+      
+      // Compare cleaned names (case insensitive)
+      const cleanFilterLower = cleanFilter.toLowerCase();
+      const cleanItemLower = cleanItem.toLowerCase();
+      
+      return cleanItemLower === cleanFilterLower || 
+             cleanItemLower.includes(cleanFilterLower) || 
+             cleanFilterLower.includes(cleanItemLower);
     });
   }, []);
 

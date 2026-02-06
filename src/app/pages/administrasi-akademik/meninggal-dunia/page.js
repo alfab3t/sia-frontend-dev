@@ -493,14 +493,32 @@ export default function Page_MeninggalDunia() {
     const [riwayatTotal, setRiwayatTotal] = useState(0);
     const riwayatPageSize = 10;
     const [riwayatSearch, setRiwayatSearch] = useState("");
-    const [filterSort, setFilterSort] = useState("tanggal asc");
+    const [filterSort, setFilterSort] = useState("tanggal_desc");
     const [filterProdi, setFilterProdi] = useState("");
 
     const sortRef = useRef();
     const prodiRef = useRef();
 
+    // Sort options (same as Cuti Akademik)
+    const dataFilterSort = [
+        { Value: "tanggal_desc", Text: "Tanggal Pengajuan [↓]" },
+        { Value: "tanggal_asc", Text: "Tanggal Pengajuan [↑]" },
+        { Value: "id_asc", Text: "No Pengajuan [↑]" },
+        { Value: "id_desc", Text: "No Pengajuan [↓]" },
+    ];
+
     const [dataFilterProdi, setDataFilterProdi] = useState([
-        { Value: "", Text: "— Semua Prodi —" }
+        { Value: "", Text: "— Semua Prodi —" },
+        { Value: "Manajemen Informatika", Text: "Manajemen Informatika" },
+        { Value: "Mekatronika", Text: "Mekatronika" },
+        { Value: "Teknik Alat Berat", Text: "Teknik Alat Berat" },
+        { Value: "Teknik Otomotif", Text: "Teknik Otomotif" },
+        { Value: "Teknik Pengolahan Hasil Perkebunan", Text: "Teknik Pengolahan Hasil Perkebunan" },
+        { Value: "Teknik Produksi dan Proses Manufaktur", Text: "Teknik Produksi dan Proses Manufaktur" },
+        { Value: "Teknologi Konstruksi Bangunan Gedung", Text: "Teknologi Konstruksi Bangunan Gedung" },
+        { Value: "Teknologi Rekayasa Logistik", Text: "Teknologi Rekayasa Logistik" },
+        { Value: "Teknologi Rekayasa Pemeliharaan Alat Berat", Text: "Teknologi Rekayasa Pemeliharaan Alat Berat" },
+        { Value: "Teknologi Rekayasa Perangkat Lunak", Text: "Teknologi Rekayasa Perangkat Lunak" },
     ]);
 
     // Load program studi list from endpoint
@@ -514,31 +532,30 @@ export default function Page_MeninggalDunia() {
                 
                 if (response.ok) {
                     const data = await response.json();
-                    const formattedData = [
-                        { Value: "", Text: "— Semua Prodi —" },
-                        ...data.map(item => ({
-                            Value: item.nama || item.name || item.text,
-                            Text: item.nama || item.name || item.text
-                        }))
-                    ];
-                    setDataFilterProdi(formattedData);
+                    
+                    // Check if data is valid and has items
+                    if (data && Array.isArray(data) && data.length > 0) {
+                        const mappedData = data.map(item => {
+                            // Use proNama from API response
+                            const prodiName = item.proNama || "";
+                            
+                            return {
+                                Value: prodiName,
+                                Text: prodiName
+                            };
+                        }).filter(item => item.Value && item.Value.trim() !== "");
+                        
+                        const formattedData = [
+                            { Value: "", Text: "— Semua Prodi —" },
+                            ...mappedData
+                        ];
+                        
+                        setDataFilterProdi(formattedData);
+                    }
                 }
             } catch (error) {
-                // API failed to load program studi, use fallback
-                if (error) { /* error handled by using fallback data */ }
-                setDataFilterProdi([
-                    { Value: "", Text: "— Semua Prodi —" },
-                    { Value: "Manajemen Informatika", Text: "Manajemen Informatika" },
-                    { Value: "Mekatronika", Text: "Mekatronika" },
-                    { Value: "Teknik Alat Berat", Text: "Teknik Alat Berat" },
-                    { Value: "Teknik Otomotif", Text: "Teknik Otomotif" },
-                    { Value: "Teknik Pengolahan Hasil Perkebunan", Text: "Teknik Pengolahan Hasil Perkebunan" },
-                    { Value: "Teknik Produksi dan Proses Manufaktur", Text: "Teknik Produksi dan Proses Manufaktur" },
-                    { Value: "Teknologi Konstruksi Bangunan Gedung", Text: "Teknologi Konstruksi Bangunan Gedung" },
-                    { Value: "Teknologi Rekayasa Logistik", Text: "Teknologi Rekayasa Logistik" },
-                    { Value: "Teknologi Rekayasa Pemeliharaan Alat Berat", Text: "Teknologi Rekayasa Pemeliharaan Alat Berat" },
-                    { Value: "Teknologi Rekayasa Perangkat Lunak", Text: "Teknologi Rekayasa Perangkat Lunak" },
-                ]);
+                // API failed, keep fallback data that was set in initial state
+                console.error("Failed to load program studi list:", error);
             }
         };
 
@@ -596,6 +613,77 @@ export default function Page_MeninggalDunia() {
             return checkSearchMatch(normalizedFields, normalizedSearchTerm);
         });
     }, [normalizeTextForSearch, checkSearchMatch]);
+
+    // Helper function for prodi filtering (same as Cuti Akademik)
+    const applyProdiFilter = useCallback((data, prodiFilter) => {
+        if (!prodiFilter || prodiFilter.trim() === "") return data;
+        
+        return data.filter(item => {
+            const itemProdi = String(item.Prodi || "").trim();
+            const filterProdi = prodiFilter.trim();
+            
+            // Exact match
+            if (itemProdi === filterProdi) return true;
+            
+            // Check if filter contains item (e.g., "D3 Manajemen Informatika (MI)" contains "Manajemen Informatika")
+            if (filterProdi.includes(itemProdi)) return true;
+            
+            // Check if item contains filter
+            if (itemProdi.includes(filterProdi)) return true;
+            
+            // Extract name without prefix and suffix for comparison
+            // Remove D3/D4 prefix and (XX) suffix from filter
+            const cleanFilter = filterProdi
+                .replaceAll(/^D[34]\s+/gi, '') // Remove D3 or D4 prefix
+                .replaceAll(/\s*\([^)]*\)\s*$/g, '') // Remove (XX) suffix
+                .trim();
+            
+            // Remove prefix and suffix from item
+            const cleanItem = itemProdi
+                .replaceAll(/^D[34]\s+/gi, '')
+                .replaceAll(/\s*\([^)]*\)\s*$/g, '')
+                .trim();
+            
+            // Compare cleaned names
+            return cleanItem === cleanFilter || 
+                   cleanItem.includes(cleanFilter) || 
+                   cleanFilter.includes(cleanItem);
+        });
+    }, []);
+
+    // Helper function for sorting (same as Cuti Akademik)
+    const applySorting = useCallback((data, sortBy) => {
+        if (!sortBy || sortBy === "") return data;
+        
+        return [...data].sort((a, b) => {
+            let valueA, valueB;
+            
+            switch (sortBy) {
+                case "tanggal_desc":
+                    valueA = new Date(a["Tanggal Pengajuan"] || "1900-01-01");
+                    valueB = new Date(b["Tanggal Pengajuan"] || "1900-01-01");
+                    return valueB - valueA;
+                    
+                case "tanggal_asc":
+                    valueA = new Date(a["Tanggal Pengajuan"] || "1900-01-01");
+                    valueB = new Date(b["Tanggal Pengajuan"] || "1900-01-01");
+                    return valueA - valueB;
+                    
+                case "id_asc":
+                    valueA = String(a["No Pengajuan"] || "");
+                    valueB = String(b["No Pengajuan"] || "");
+                    return valueA.localeCompare(valueB);
+                    
+                case "id_desc":
+                    valueA = String(a["No Pengajuan"] || "");
+                    valueB = String(b["No Pengajuan"] || "");
+                    return valueB.localeCompare(valueA);
+                    
+                default:
+                    return 0;
+            }
+        });
+    }, []);
 
     const loadRiwayat = useCallback(
         async (page = 1, keyword = riwayatSearch, sort = filterSort, prodi = filterProdi) => {
@@ -680,25 +768,15 @@ export default function Page_MeninggalDunia() {
                     });
                 }
 
-                // Apply accurate client-side search filter
-                if (keyword && keyword.trim() !== "") {
-                    actualData = applyAccurateSearchFilter(actualData, keyword);
-                }
-
-                // Client-side pagination since backend doesn't handle it properly
-                const totalItems = actualData.length;
-                const startIndex = (page - 1) * riwayatPageSize;
-                const endIndex = startIndex + riwayatPageSize;
-                const paginatedData = actualData.slice(startIndex, endIndex);
-
-                const formattedData = paginatedData.map((item, index) => {
+                // Format all data first (like Cuti Akademik)
+                let allFormattedData = actualData.map((item, index) => {
                     let actions = ["Detail"];
                     if (item.status === "Disetujui") {
                         actions = ["Detail", "DownloadSK"];
                     }
 
                     return {
-                        No: ((page - 1) * riwayatPageSize) + index + 1,
+                        No: index + 1, // Will be recalculated after pagination
                         id: item.id,
                         "No Pengajuan": item.noPengajuan || item.id || "-",
                         "Tanggal Pengajuan": item.tanggalPengajuan || "-",
@@ -712,7 +790,24 @@ export default function Page_MeninggalDunia() {
                     };
                 });
 
-                setDataRiwayat(formattedData);
+                // Apply filters and sorting (like Cuti Akademik)
+                allFormattedData = applyAccurateSearchFilter(allFormattedData, keyword);
+                allFormattedData = applyProdiFilter(allFormattedData, prodi);
+                allFormattedData = applySorting(allFormattedData, sort);
+
+                // Client-side pagination
+                const totalItems = allFormattedData.length;
+                const startIndex = (page - 1) * riwayatPageSize;
+                const endIndex = startIndex + riwayatPageSize;
+                const paginatedData = allFormattedData.slice(startIndex, endIndex);
+
+                // Recalculate row numbers for current page
+                const finalData = paginatedData.map((item, index) => ({
+                    ...item,
+                    No: startIndex + index + 1
+                }));
+
+                setDataRiwayat(finalData);
                 
                 // Use total items before pagination for proper pagination controls
                 setRiwayatTotal(totalItems);
@@ -726,7 +821,7 @@ export default function Page_MeninggalDunia() {
                 setLoadingRiwayat(false);
             }
         },
-        [userData, riwayatSearch, filterSort, filterProdi, riwayatPageSize, extractArrayFromResponse, isProdi, prodiKonsentrasi, applyAccurateSearchFilter]
+        [userData, riwayatSearch, filterSort, filterProdi, riwayatPageSize, extractArrayFromResponse, isProdi, prodiKonsentrasi, applyAccurateSearchFilter, applyProdiFilter, applySorting]
     );
 
 
@@ -1320,12 +1415,7 @@ export default function Page_MeninggalDunia() {
         <>
             <DropDown
                 ref={sortRef}
-                arrData={[
-                    { Value: "tanggal asc", Text: "Tanggal Pengajuan [↑]" },
-                    { Value: "tanggal desc", Text: "Tanggal Pengajuan [↓]" },
-                    { Value: "nomor asc", Text: "Nomor Pengajuan [↑]" },
-                    { Value: "nomor desc", Text: "Nomor Pengajuan [↓]" },
-                ]}
+                arrData={dataFilterSort}
                 type="pilih"
                 label="Urut Berdasarkan"
                 forInput="urutRiwayat"

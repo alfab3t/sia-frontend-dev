@@ -44,6 +44,8 @@ export default function MasterInstitusiBeasiswaPage() {
   const [sortBy, setSortBy] = useState(dataFilterSort[0].Value);
   const [sortStatus, setSortStatus] = useState(dataFilterStatus[0].Value);
 
+  const permissions = localStorage.getItem("permissionData");
+
   const loadData = useCallback(
     async (page, sort, cari, status) => {
       try {

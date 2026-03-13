@@ -116,7 +116,7 @@ const SsoPage = () => {
       if (data?.errorMessage === "") {
         Cookies.set("jwtToken", data.token);
         const userData = {
-          permission: data.listPermission,
+          //permission: data.listPermission,
           nama: ssoData.nama,
           role: selectedRole.namaRole,
           aplikasi: selectedRole.namaAplikasi,
@@ -124,7 +124,8 @@ const SsoPage = () => {
           roleId: selectedRole.roleId,
         };
         Cookies.set("userData", encryptId(JSON.stringify(userData)));
-        Cookies.set("permissionData", JSON.stringify(data.listPermission));
+        localStorage.setItem("permissionData", JSON.stringify(data.listPermission));
+        //Cookies.set("permissionData", JSON.stringify(data.listPermission));
         Toast.success(
           "Berhasil login ke " +
             ` ${selectedRole.namaAplikasi} sebagai ${selectedRole.namaRole}`

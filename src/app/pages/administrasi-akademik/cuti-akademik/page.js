@@ -46,12 +46,12 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   }, []);
 
   const roleId = userData?.roleId || "";
-  
+
   const isMahasiswa = roleId === "ROL23";
-  const isProdi = roleId === "ROL71";
-  const isWadir1 = roleId === "ROL999";
-  const isFinance = roleId === "ROL01";
-  const isAdmin = roleId === "ROL74";
+  const isProdi     = roleId === "ROL71";
+  const isWadir1    = roleId === "ROL999";
+  const isFinance   = roleId === "ROL01";
+  const isAdmin     = roleId === "ROL74";
 
   const dataFilterSort = [
     { Value: "tanggal_desc", Text: "Tanggal Pengajuan [↓]" },
@@ -255,58 +255,78 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const determineMahasiswaActions = useCallback((item, currentStatus, isDraft) => {
     const approveProdiValue = item.approveProdi || item.cak_approve_prodi || "";
     
-    // If it's a draft, always allow mahasiswa to edit, delete, or submit
     if (isDraft) {
-      return ["Detail", "Edit", "Delete", "Sent"];
+      return [
+        "Detail",
+        ...(isClient && userData?.permission?.includes("cuti_akademik.edit") ? ["Edit"] : []),
+        ...(isClient && userData?.permission?.includes("cuti_akademik.delete") ? ["Delete"] : []),
+        ...(isClient && userData?.permission?.includes("cuti_akademik.create") ? ["Sent"] : []),
+      ];
     }
     
-    // If already submitted and has prodi approval but not yet fully approved
     if (approveProdiValue && approveProdiValue !== "" && currentStatus !== "Disetujui") {
       return ["Detail"];
     }
     
     if (currentStatus === "Disetujui") {
-      return ["Detail", "DownloadSK"];
+      return [
+        "Detail",
+        ...(isClient && userData?.permission?.includes("cuti_akademik.print") ? ["DownloadSK"] : []),
+      ];
     }
     
     return ["Detail"];
-  }, []);
+  }, [isClient, userData]);
 
   const determineProdiActions = useCallback((currentStatus) => {
     if (currentStatus === "Draft") {
-      return ["Detail", "Edit", "Delete", "Sent"];
+      return [
+        "Detail",
+        ...(isClient && userData?.permission?.includes("cuti_akademik.edit") ? ["Edit"] : []),
+        ...(isClient && userData?.permission?.includes("cuti_akademik.delete") ? ["Delete"] : []),
+        ...(isClient && userData?.permission?.includes("cuti_akademik.create") ? ["Sent"] : []),
+      ];
     }
     
     if (currentStatus === "Belum Disetujui Prodi") {
-      return ["Detail", "Approve", "Reject"];
+      return [
+        "Detail",
+        ...(isClient && userData?.permission?.includes("cuti_akademik.approve_reject") ? ["Approve", "Reject"] : []),
+      ];
     }
     
     return ["Detail"];
-  }, []);
+  }, [isClient, userData]);
 
   const determineWadir1Actions = useCallback((currentStatus) => {
     if (currentStatus === "Belum Disetujui Wadir 1") {
-      return ["Detail", "Approve", "Reject"];
+      return [
+        "Detail",
+        ...(isClient && userData?.permission?.includes("cuti_akademik.approve_reject") ? ["Approve", "Reject"] : []),
+      ];
     }
     return ["Detail"];
-  }, []);
+  }, [isClient, userData]);
 
   const determineFinanceActions = useCallback((currentStatus) => {
     if (currentStatus === "Belum Disetujui Finance") {
-      return ["Detail", "Approve", "Reject"];
+      return [
+        "Detail",
+        ...(isClient && userData?.permission?.includes("cuti_akademik.approve_reject") ? ["Approve", "Reject"] : []),
+      ];
     }
     return ["Detail"];
-  }, []);
+  }, [isClient, userData]);
 
   const determineAdminActions = useCallback((currentStatus) => {
     let actions = ["Detail"];
     
-    // Admin can upload SK for items waiting for SK upload
     if (currentStatus === "Menunggu Upload SK") {
-      actions.push("Upload");
+      if (isClient && userData?.permission?.includes("cuti_akademik.edit")) {
+        actions.push("Upload");
+      }
     }
     
-    // Admin can upload SK for approved items
     const isAllApprovalsComplete = currentStatus && 
       !currentStatus.includes("Belum Disetujui Prodi") && 
       !currentStatus.includes("Belum Disetujui Wadir 1") && 
@@ -316,17 +336,16 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       
     const isReadyForSK = currentStatus === "Disetujui" || isAllApprovalsComplete;
     
-    if (isReadyForSK) {
+    if (isReadyForSK && isClient && userData?.permission?.includes("cuti_akademik.edit")) {
       actions.push("UploadSK");
     }
     
-    // Admin can download SK for approved items
-    if (currentStatus === "Disetujui") {
+    if (currentStatus === "Disetujui" && isClient && userData?.permission?.includes("cuti_akademik.print")) {
       actions.push("DownloadSK");
     }
     
     return actions;
-  }, []);
+  }, [isClient, userData]);
 
   const formatTableRow = useCallback((item, index, startIndex, currentStatus, actions) => {
     const isDraft = currentStatus === "Draft";
@@ -527,8 +546,8 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
           return;
         }
 
-        let backendRole = roleId;
-        if (roleId === "ROL74") {
+        let backendRole = userData?.roleId || "";
+        if (isAdmin) {
           backendRole = "ROL74";
         }
 
@@ -555,7 +574,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         setLoading(false);
       }
     },
-    [roleId, isMahasiswa, isProdi, isWadir1, isFinance, isAdmin, userData, search, prodiKonsentrasi, getRoleBasedParams, buildMainDataParams, fetchMainData, extractArrayData, processMainData]
+    [isMahasiswa, isProdi, isWadir1, isFinance, isAdmin, userData, search, prodiKonsentrasi, getRoleBasedParams, buildMainDataParams, fetchMainData, extractArrayData, processMainData]
   );
 
   const buildRiwayatParams = useCallback(() => {
@@ -1581,6 +1600,8 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   }, []); // Empty dependency array - run only once
 
   useEffect(() => {
+    if (!isClient) return;
+
     if (!ssoData) {
       Toast.error("Sesi habis. Silakan login kembali.");
       router.push("/auth/login");
@@ -1605,7 +1626,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         setTimeout(() => loadDataRiwayat(1), 50);
       }
     }
-  }, [ssoData, userData, loadData, loadDataRiwayat, isProdi, isWadir1, isFinance, isAdmin, router, prodiKonsentrasi, loadingProdiKonsentrasi]);
+  }, [isClient, ssoData, userData, loadData, loadDataRiwayat, isProdi, isWadir1, isFinance, isAdmin, router, prodiKonsentrasi, loadingProdiKonsentrasi]);
 
   const getEmptyStateMessage = useCallback(() => {
     if (isMahasiswa) {
@@ -1656,18 +1677,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
   // Prevent hydration mismatch
   if (!isClient) {
-    return (
-      <MainContent
-        layout="Admin"
-        loading={true}
-        title="Daftar Pengajuan Cuti Akademik"
-        breadcrumb={[
-          { label: "Sistem Informasi Akademik" },
-          { label: "Administrasi Akademik" },
-          { label: "Cuti Akademik" },
-        ]}
-      />
-    );
+    return null;
   }
 
   return (
@@ -1712,7 +1722,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
           {(isMahasiswa || isProdi) && (
             <>
               {isMahasiswa ? (
-                shouldShowMahasiswaAddButton() && (
+                shouldShowMahasiswaAddButton() && isClient && userData?.permission?.includes("cuti_akademik.create") && (
                   <Button
                     classType="primary"
                     label="+ Tambah"
@@ -1720,11 +1730,13 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
                   />
                 )
               ) : (
-                <Button
-                  classType="primary"
-                  label="+ Tambah"
-                  onClick={handleAdd}
-                />
+                isClient && userData?.permission?.includes("cuti_akademik.create") && (
+                  <Button
+                    classType="primary"
+                    label="+ Tambah"
+                    onClick={handleAdd}
+                  />
+                )
               )}
             </>
           )}

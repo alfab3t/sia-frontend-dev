@@ -34,77 +34,6 @@ const getAuthHeadersForFormData = () => {
     };
 };
 
-function useUserRoles(userData, permission) {
-    const roles = useMemo(() => {
-        const roleId = userData?.roleId || "";
-        const isProdi = roleId === "ROL71";
-        const isWadir1 = roleId === "ROL999";
-        const isFinance = roleId === "ROL01";
-        const isAdmin = roleId === "ROL74";
-        
-        return { isProdi, isFinance, isWadir1, isAdmin };
-    }, [userData, permission]);
-
-    return roles;
-}
-
-function usePermissions(userData) {
-    const [permission, setPermission] = useState(null);
-
-    useEffect(() => {
-        const loadPermission = async () => {
-            try {
-                // Check if permissions are already in userData
-                if (userData?.permission && Array.isArray(userData.permission)) {
-                    setPermission({ listPermission: userData.permission });
-                    return;
-                }
-
-                const payload = {
-                    username: userData?.nama || userData?.username || "",
-                    appId: "APP08",
-                    roleId: userData?.roleId || ""
-                };
-
-                const res = await fetch(`${API_LINK}Auth/getpermission`, {
-                    method: "POST",
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify(payload),
-                });
-                
-                const data = await res.json();
-                
-                if (data?.errorMessage === "") {
-                    setPermission(data);
-                } else {
-                    setPermission(null);
-                }
-            } catch (error) {
-                // Permission loading failed
-                if (error) setPermission(null);
-            }
-        };
-
-        if (userData?.nama || userData?.username) {
-            loadPermission();
-        }
-    }, [userData]);
-
-    return permission;
-}
-
-function hasPermission(permission, permissionKey) {
-    // Handle both old and new permission formats
-    if (permission?.permissions) {
-        // Old format: { permissions: [{ permission: "key", isAllowed: true }] }
-        return permission.permissions.find(p => p.permission === permissionKey)?.isAllowed || false;
-    } else if (permission?.listPermission) {
-        // New format: { listPermission: ["key1", "key2", ...] }
-        return permission.listPermission.includes(permissionKey);
-    }
-    return false;
-}
-
 export default function Page_MeninggalDunia() {
     const ssoData = useMemo(() => getSSOData(), []);
     const userData = useMemo(() => getUserData(), []);
@@ -116,8 +45,12 @@ export default function Page_MeninggalDunia() {
         setIsClient(true);
     }, []);
     
-    const permission = usePermissions(userData);
-    const { isProdi, isFinance, isWadir1, isAdmin } = useUserRoles(userData, permission);
+    const roleId = userData?.roleId || "";
+
+    const isProdi   = roleId === "ROL71";
+    const isWadir1  = roleId === "ROL999";
+    const isFinance = roleId === "ROL01";
+    const isAdmin   = roleId === "ROL74";
 
     const useProdiKonsentrasi = (isProdi, userData) => {
         const [prodiKonsentrasi, setProdiKonsentrasi] = useState(null);
@@ -223,97 +156,91 @@ export default function Page_MeninggalDunia() {
         return allowedStatuses.includes(statusLower);
     }, []);
 
-    const determineItemActions = useCallback((item, roles, userData, permission) => {
-        const { isProdi, isWadir1, isFinance, isAdmin } = roles;
+    const determineItemActions = useCallback((item) => {
         const currentStatus = item.status || item.mdu_status || "";
         const hasUploadedSK = item.srt_no || item.suratNo || item.mdu_srt_no;
 
         let actions = [];
 
-        // Always allow detail if user has view permission
-        if (hasPermission(permission, "meninggal_dunia.view")) {
+        if (isClient && userData?.permission?.includes("meninggal_dunia.view")) {
             actions.push("Detail");
         }
 
         if (isProdi) {
-            actions = [...actions, ...determineProdiActions(currentStatus, permission)];
+            actions = [...actions, ...determineProdiActions(currentStatus)];
         } else if (isWadir1) {
-            actions = [...actions, ...determineWadir1Actions(currentStatus, permission)];
+            actions = [...actions, ...determineWadir1Actions(currentStatus)];
         } else if (isFinance) {
-            actions = [...actions, ...determineFinanceActions(currentStatus, permission)];
+            actions = [...actions, ...determineFinanceActions(currentStatus)];
         } else if (isAdmin) {
-            actions = [...actions, ...determineAdminActions(currentStatus, hasUploadedSK, permission)];
+            actions = [...actions, ...determineAdminActions(currentStatus, hasUploadedSK)];
         }
 
         return actions.length > 0 ? actions : ["Detail"];
-    }, []);
+    }, [isClient, isProdi, isWadir1, isFinance, isAdmin, userData]);
 
-    const determineProdiActions = useCallback((currentStatus, permission) => {
+    const determineProdiActions = useCallback((currentStatus) => {
         let actions = [];
         
         const statusLower = currentStatus.toLowerCase().trim();
         
         if (statusLower === "draft") {
-            // Draft: Prodi can edit, delete, and submit
-            if (hasPermission(permission, "meninggal_dunia.edit")) actions.push("Edit");
-            if (hasPermission(permission, "meninggal_dunia.delete")) actions.push("Delete");
-            if (hasPermission(permission, "meninggal_dunia.create")) actions.push("Sent");
+            if (isClient && userData?.permission?.includes("meninggal_dunia.edit")) actions.push("Edit");
+            if (isClient && userData?.permission?.includes("meninggal_dunia.delete")) actions.push("Delete");
+            if (isClient && userData?.permission?.includes("meninggal_dunia.create")) actions.push("Sent");
         }
         // For rejected status and other statuses (Belum Disetujui, Menunggu, etc.), only Detail is available (handled by determineItemActions)
-        
         return actions;
-    }, []);
+    }, [isClient, userData]);
 
-    const determineWadir1Actions = useCallback((currentStatus, permission) => {
+    const determineWadir1Actions = useCallback((currentStatus) => {
         let actions = [];
         
         if (currentStatus === "Belum Disetujui Wadir 1") {
-            if (hasPermission(permission, "meninggal_dunia.approve_reject")) {
+            if (isClient && userData?.permission?.includes("meninggal_dunia.approve_reject")) {
                 actions.push("Approve", "Reject");
             }
         }
-        
         return actions;
-    }, []);
+    }, [isClient, userData]);
 
-    const determineFinanceActions = useCallback((currentStatus, permission) => {
+    const determineFinanceActions = useCallback((currentStatus) => {
         let actions = [];
         
         if (currentStatus === "Belum Disetujui Finance") {
-            if (hasPermission(permission, "meninggal_dunia.approve_reject")) {
+            if (isClient && userData?.permission?.includes("meninggal_dunia.approve_reject")) {
                 actions.push("Approve", "Reject");
             }
         }
-        
         return actions;
-    }, []);
+    }, [isClient, userData]);
 
-    const determineAdminActions = useCallback((currentStatus, hasUploadedSK, permission) => {
+    const determineAdminActions = useCallback((currentStatus, hasUploadedSK) => {
         let actions = [];
         
         // Admin can upload SK for items waiting for SK upload
         if (currentStatus === "Menunggu Upload SK") {
-            if (hasPermission(permission, "meninggal_dunia.edit")) {
-                actions.push("Upload");  // Use Upload instead of UploadSK
+            if (isClient && userData?.permission?.includes("meninggal_dunia.edit")) {
+                actions.push("Upload");
             }
         }
         
         // Admin can download SK for approved items
         if (currentStatus === "Disetujui" && hasUploadedSK) {
-            if (hasPermission(permission, "meninggal_dunia.print")) {
+            if (isClient && userData?.permission?.includes("meninggal_dunia.print")) {
                 actions.push("DownloadSK");
             }
         }
         
         // Admin can print for approved items
         if (currentStatus === "Disetujui") {
-            if (hasPermission(permission, "meninggal_dunia.print")) {
+            if (isClient && userData?.permission?.includes("meninggal_dunia.print")) {
                 actions.push("Print");
             }
         }
         
         return actions;
-    }, []);
+    }, [isClient, userData]);
 
     const loadPengajuan = useCallback(
         async (page = 1) => {
@@ -405,7 +332,7 @@ export default function Page_MeninggalDunia() {
                 const paginatedData = filteredData.slice(startIndex, endIndex);
 
                 const formattedData = paginatedData.map((item, index) => 
-                    formatTableRow(item, index, startIndex, roles, userData, permission)
+                    formatTableRow(item, index, startIndex)
                 );
 
                 setDataPengajuan(formattedData);
@@ -419,7 +346,7 @@ export default function Page_MeninggalDunia() {
                 setLoadingPengajuan(false);
             }
         },
-        [isProdi, isWadir1, isFinance, isAdmin, userData, prodiKonsentrasi, filterDataByRole, pengajuanPageSize, permission]
+        [isProdi, isWadir1, isFinance, isAdmin, userData, prodiKonsentrasi, filterDataByRole, pengajuanPageSize]
     );
 
     const extractArrayFromResponse = useCallback((data) => {
@@ -453,10 +380,9 @@ export default function Page_MeninggalDunia() {
         return "✗";
     }, []);
 
-    const formatTableRow = useCallback((item, index, startIndex, roles, userData, permission) => {
-        const { isAdmin } = roles;
+    const formatTableRow = useCallback((item, index, startIndex) => {
         const currentStatus = item.status || item.mdu_status || "";
-        const actions = determineItemActions(item, roles, userData, permission);
+        const actions = determineItemActions(item);
 
         const tableData = {
             No: startIndex + index + 1,
@@ -485,7 +411,7 @@ export default function Page_MeninggalDunia() {
         }
 
         return tableData;
-    }, [determineItemActions, getWadir1Icon, permission]);
+    }, [determineItemActions, getWadir1Icon, isAdmin]);
 
     const [dataRiwayat, setDataRiwayat] = useState([]);
     const [loadingRiwayat, setLoadingRiwayat] = useState(true);
@@ -1376,7 +1302,7 @@ export default function Page_MeninggalDunia() {
     }, []);
 
     const handleExportExcel = async () => {
-        if (!hasPermission(permission, "meninggal_dunia.export")) {
+        if (!isClient || !userData?.permission?.includes("meninggal_dunia.export")) {
             Toast.error("Anda tidak memiliki izin untuk mengekspor data.");
             return;
         }
@@ -1447,6 +1373,8 @@ export default function Page_MeninggalDunia() {
     }, []); // Empty dependency array - run only once
 
     useEffect(() => {
+        if (!isClient) return;
+
         if (!ssoData) {
             Toast.error("Sesi habis. Silakan login kembali.");
             router.push("/auth/login");
@@ -1466,22 +1394,11 @@ export default function Page_MeninggalDunia() {
         if (isProdi || isWadir1 || isFinance || isAdmin) {
             loadRiwayat(1);
         }
-    }, [ssoData, userData, loadPengajuan, loadRiwayat, isProdi, isWadir1, isFinance, isAdmin, router, prodiKonsentrasi, loadingProdiKonsentrasi]);
+    }, [isClient, ssoData, userData, loadPengajuan, loadRiwayat, isProdi, isWadir1, isFinance, isAdmin, router, prodiKonsentrasi, loadingProdiKonsentrasi]);
 
     // Early return for server-side rendering to prevent hydration mismatch
     if (!isClient) {
-        return (
-            <MainContent
-                layout="Admin"
-                loading={true}
-                title="Pengajuan Meninggal Dunia"
-                breadcrumb={[
-                    { label: "Sistem Informasi Akademik" },
-                    { label: "Administrasi Akademik" },
-                    { label: "Meninggal Dunia" },
-                ]}
-            />
-        );
+        return null;
     }
 
     return (
@@ -1502,7 +1419,7 @@ export default function Page_MeninggalDunia() {
                     <h5>Daftar Pengajuan Meninggal Dunia</h5>
                     
                     <div className="d-flex justify-content-between align-items-center mb-3">
-                        {isClient && isProdi && hasPermission(permission, "meninggal_dunia.create") && (
+                        {isClient && isProdi && userData?.permission?.includes("meninggal_dunia.create") && (
                             <Button
                                 classType="primary"
                                 label="+ Tambah"
@@ -1588,7 +1505,7 @@ export default function Page_MeninggalDunia() {
                         searchPlaceholder=""
                         showAddButton={false}
                         showFilterButton={true}
-                        showExportButton={hasPermission(permission, "meninggal_dunia.export")}
+                        showExportButton={isClient && userData?.permission?.includes("meninggal_dunia.export")}
                         exportButtonText="Unduh Excel"
                         filterContent={filterContentRiwayat}
                     />

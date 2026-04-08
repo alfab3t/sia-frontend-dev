@@ -47,12 +47,6 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
   const roleId = userData?.roleId || "";
 
-  const isMahasiswa = roleId === "ROL23";
-  const isProdi     = roleId === "ROL71";
-  const isWadir1    = roleId === "ROL999";
-  const isFinance   = roleId === "ROL01";
-  const isAdmin     = roleId === "ROL74";
-
   const dataFilterSort = [
     { Value: "tanggal_desc", Text: "Tanggal Pengajuan [↓]" },
     { Value: "tanggal_asc", Text: "Tanggal Pengajuan [↑]" },
@@ -90,7 +84,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const [loadingProdiKonsentrasi, setLoadingProdiKonsentrasi] = useState(false);
 
   useEffect(() => {
-    if (!isMahasiswa || !userData) return;
+    if (!(roleId === "ROL23") || !userData) return;
     
     const checkBebasTanggungan = async () => {
       try {
@@ -115,10 +109,10 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     };
 
     checkBebasTanggungan();
-  }, [isMahasiswa, userData]);
+  }, [roleId, userData]);
   
   useEffect(() => {
-    if (!isProdi || !userData) return;
+    if (!(roleId === "ROL71") || !userData) return;
     
     const loadProdiKonsentrasi = async () => {
       try {
@@ -151,55 +145,37 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     };
 
     loadProdiKonsentrasi();
-  }, [isProdi, userData]);
+  }, [roleId, userData]);
   
   const getRoleBasedParams = useCallback(() => {
     let mhsId = "%";
     let statusFilter = "";
     let userId = "";
     
-    if (isMahasiswa) {
+    if (roleId === "ROL23") {
       mhsId = userData?.mhsId || userData?.nama || userData?.username || userData?.userid || "";
-      if (!mhsId) {
-        return null;
-      }
-
-    } else if (isProdi) {
+      if (!mhsId) return null;
+    } else if (roleId === "ROL71") {
       userId = userData?.username || "";
-      
-    } else if (isWadir1) {
+    } else if (roleId === "ROL999") {
       statusFilter = "Belum Disetujui Wadir 1";
-      
-    } else if (isFinance) {
+    } else if (roleId === "ROL01") {
       statusFilter = "Belum Disetujui Finance";
-      
-    } else if (isAdmin) {
-      // Admin can see all data, no status filter
-      
-    } 
+    }
 
     return { mhsId, statusFilter, userId };
-  }, [isMahasiswa, isProdi, isWadir1, isFinance, isAdmin, userData]);
+  }, [roleId, userData]);
 
 
   const filterDataByRole = useCallback((actualData) => {
     return actualData.filter(item => {
       const currentStatus = item.status || item.cak_status || "";
-      
-      if (isMahasiswa) {
-        return true;
-      }
-      
-      if (isProdi) {
-        return filterProdiData(item, currentStatus);
-      }
-      
-      if (isAdmin) {
-        return filterAdminData(currentStatus);
-      }
+      if (roleId === "ROL23") return true;
+      if (roleId === "ROL71") return filterProdiData(item, currentStatus);
+      if (roleId === "ROL74") return filterAdminData(currentStatus);
       return currentStatus !== "Disetujui";
     });
-  }, [isMahasiswa, isProdi, isAdmin, prodiKonsentrasi]);
+  }, [roleId, prodiKonsentrasi]);
 
   const filterProdiData = useCallback((item, currentStatus) => {
     const itemProdi = item.prodi || item.kon_nama || item.konsentrasi || "";
@@ -229,28 +205,13 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   }, []);
 
   const determineActions = useCallback((item, currentStatus, isDraft) => {
-    if (isMahasiswa) {
-      return determineMahasiswaActions(item, currentStatus, isDraft);
-    }
-    
-    if (isProdi) {
-      return determineProdiActions(currentStatus);
-    }
-    
-    if (isWadir1) {
-      return determineWadir1Actions(currentStatus);
-    }
-    
-    if (isFinance) {
-      return determineFinanceActions(currentStatus);
-    }
-    
-    if (isAdmin) {
-      return determineAdminActions(currentStatus);
-    }
-    
+    if (roleId === "ROL23") return determineMahasiswaActions(item, currentStatus, isDraft);
+    if (roleId === "ROL71") return determineProdiActions(currentStatus);
+    if (roleId === "ROL999") return determineWadir1Actions(currentStatus);
+    if (roleId === "ROL01") return determineFinanceActions(currentStatus);
+    if (roleId === "ROL74") return determineAdminActions(currentStatus);
     return ["Detail"];
-  }, [isMahasiswa, isProdi, isWadir1, isFinance, isAdmin]);
+  }, [roleId]);
 
   const determineMahasiswaActions = useCallback((item, currentStatus, isDraft) => {
     const approveProdiValue = item.approveProdi || item.cak_approve_prodi || "";
@@ -363,7 +324,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     let noPengajuan;
     if (isDraft && isCreatedByProdi) {
       noPengajuan = "Draft";
-    } else if (isMahasiswa && isDraft) {
+    } else if (roleId === "ROL23" && isDraft) {
       noPengajuan = "Draft";
     } else {
       noPengajuan = item.id || item.idDisplay || item.cak_id || "-";
@@ -382,7 +343,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       Status: currentStatus || "-",
     };
 
-    if (isAdmin) {
+    if (roleId === "ROL74") {
       rowData["SK Cuti Akademik"] = formatSKCutiAkademikColumn(currentStatus, item.cak_id || item.id || item.idDisplay);
       rowData.Aksi = actions;
       rowData.Alignment = new Array(11).fill("center");
@@ -392,20 +353,16 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     }
 
     return rowData;
-  }, [isAdmin, isMahasiswa]);
+  }, [roleId]);
 
   const formatSKCutiAkademikColumn = useCallback((currentStatus, id) => {
-    if (isAdmin) {
-      if (currentStatus === "Menunggu Upload SK") {
-        // Return HTML button for Print since TableRow.js won't handle this column
-        return `<button type="button" class="btn px-1 py-0 text-primary" title="Cetak SK" onclick="window.handlePrintSK('${id}')">
-                  <i class="bi bi-printer"></i>
-                </button>`;
-      }
-      return "-";  // Show dash for other statuses
+    if (roleId === "ROL74" && currentStatus === "Menunggu Upload SK") {
+      return `<button type="button" class="btn px-1 py-0 text-primary" title="Cetak SK" onclick="window.handlePrintSK('${id}')">
+                <i class="bi bi-printer"></i>
+              </button>`;
     }
-    return "-";  // Show dash for non-admin
-  }, [isAdmin]);
+    return "-";
+  }, [roleId]);
 
   const getProdiIcon = useCallback((status, item) => {
     if (!status) return "✗";
@@ -452,7 +409,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     const { mhsId, statusFilter, userId } = roleParams;
     const params = new URLSearchParams();
     
-    if (isMahasiswa) {
+    if (roleId === "ROL23") {
       params.append('mhsId', mhsId);
     } else {
       params.append('mhsId', mhsId || '%');
@@ -464,7 +421,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     if (search) params.append('search', search);
 
     return params;
-  }, [isMahasiswa, search]);
+  }, [roleId, search]);
 
   const fetchMainData = useCallback(async (params) => {
     const url = `${API_LINK}CutiAkademik/GetAllCutiAkademik?${params}`;
@@ -547,7 +504,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         }
 
         let backendRole = userData?.roleId || "";
-        if (isAdmin) {
+        if (roleId === "ROL74") {
           backendRole = "ROL74";
         }
 
@@ -574,28 +531,26 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         setLoading(false);
       }
     },
-    [isMahasiswa, isProdi, isWadir1, isFinance, isAdmin, userData, search, prodiKonsentrasi, getRoleBasedParams, buildMainDataParams, fetchMainData, extractArrayData, processMainData]
+    [roleId, userData, search, prodiKonsentrasi, getRoleBasedParams, buildMainDataParams, fetchMainData, extractArrayData, processMainData]
   );
 
   const buildRiwayatParams = useCallback(() => {
     const params = new URLSearchParams();
     
-    if (!isAdmin && userData?.username) {
-      const userIdentifier = isMahasiswa ? 
-        (userData?.mhsId || userData?.nama || userData?.username) : 
-        userData?.username;
+    if (roleId !== "ROL74" && userData?.username) {
+      const userIdentifier = roleId === "ROL23"
+        ? (userData?.mhsId || userData?.nama || userData?.username)
+        : userData?.username;
       params.append('userId', userIdentifier);
     }
     
-    // Untuk prodi, tambahkan filter berdasarkan ID konsentrasi
-    if (isProdi && prodiKonsentrasi) {
-      // Coba dengan nama konsentrasi yang sudah dibersihkan
+    if (roleId === "ROL71" && prodiKonsentrasi) {
       const cleanKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, '').trim();
       params.append('konsentrasi', cleanKonsentrasi);
     }
     
     return params;
-  }, [isAdmin, isMahasiswa, userData, isProdi, prodiKonsentrasi]);
+  }, [roleId, userData, prodiKonsentrasi]);
 
   const fetchRiwayatData = useCallback(async (params) => {
     const url = `${API_LINK}CutiAkademik/GetRiwayatCutiAkademik?${params}`;
@@ -891,7 +846,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         let allFormattedData = await Promise.all(formattedDataPromises);
 
         // Filter berdasarkan konsentrasi prodi (client-side fallback)
-        if (isProdi && prodiKonsentrasi) {
+        if (roleId === "ROL71" && prodiKonsentrasi) {
           const cleanProdiKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, '').trim();
           allFormattedData = allFormattedData.filter(item => {
             const itemProdi = String(item.Prodi || "").trim();
@@ -923,7 +878,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         setTotalDataRiwayat(0);
       }
     },
-    [userData, searchRiwayat, sortBy, filterProdi, isProdi, isWadir1, isFinance, isAdmin, isMahasiswa, pageSize, buildRiwayatParams, fetchRiwayatData, extractArrayData, formatRiwayatItem, applySearchFilter, applyProdiFilter, applySorting]
+    [userData, searchRiwayat, sortBy, filterProdi, roleId, pageSize, buildRiwayatParams, fetchRiwayatData, extractArrayData, formatRiwayatItem, applySearchFilter, applyProdiFilter, applySorting]
   );
   
   const validateUserForSubmission = useCallback(() => {
@@ -938,25 +893,12 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   }, [userData]);
 
   const buildSubmissionPayload = useCallback((id, modifiedBy) => {
-    const basePayload = {
-      draftId: id,
-      modifiedBy: modifiedBy
-    };
-
-    // Check if this is a prodi user to use the correct endpoint
-    if (isProdi) {
-      return {
-        payload: basePayload,
-        url: `${API_LINK}CutiAkademik/GenerateIdFinalCutiAkademikByProdi`
-      };
+    const basePayload = { draftId: id, modifiedBy: modifiedBy };
+    if (roleId === "ROL71") {
+      return { payload: basePayload, url: `${API_LINK}CutiAkademik/GenerateIdFinalCutiAkademikByProdi` };
     }
-
-    // For non-prodi users, use the regular endpoint
-    return {
-      payload: basePayload,
-      url: `${API_LINK}CutiAkademik/GenerateIdFinalCutiAkademik`
-    };
-  }, [isProdi]);
+    return { payload: basePayload, url: `${API_LINK}CutiAkademik/GenerateIdFinalCutiAkademik` };
+  }, [roleId]);
 
   const handleSubmissionError = useCallback((res, raw) => {
     
@@ -989,7 +931,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     if (result?.finalId) {
       Toast.success(`Pengajuan berhasil diajukan dengan ID: ${result.finalId}`);
       
-      if (isProdi) {
+      if (roleId === "ROL71") {
         const prodiCreatedApps = JSON.parse(sessionStorage.getItem('prodiCreatedApps') || '[]');
         const updatedApps = prodiCreatedApps.filter(appId => appId !== id);
         sessionStorage.setItem('prodiCreatedApps', JSON.stringify(updatedApps));
@@ -1000,7 +942,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       const errorMsg = result?.message || result?.error || "Gagal mengajukan pengajuan.";
       Toast.error(errorMsg);
     }
-  }, [isProdi, loadData]);
+  }, [roleId, loadData]);
 
   const handleAjukan = async (id) => {
     const confirm = await SweetAlert({
@@ -1159,24 +1101,13 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
       let url, payload;
 
-      if (isProdi) {
+      if (roleId === "ROL71") {
         const menimbang = "Pengajuan cuti akademik telah memenuhi persyaratan dan disetujui oleh program studi.";
-        
         url = `${API_LINK}CutiAkademik/ApproveCutiAkademikByProdi`;
-        payload = {
-          id: itemId,
-          menimbang: menimbang,
-          approvedBy: approvedBy
-        };
-        
-      } else if (isFinance || isWadir1) {
+        payload = { id: itemId, menimbang: menimbang, approvedBy: approvedBy };
+      } else if (roleId === "ROL01" || roleId === "ROL999") {
         url = `${API_LINK}CutiAkademik/ApproveCutiAkademik`;
-        payload = {
-          id: itemId,
-          role: roleId,
-          approvedBy: approvedBy
-        };
-        
+        payload = { id: itemId, role: roleId, approvedBy: approvedBy };
       } else {
         Toast.error("Role tidak dikenali untuk approval.");
         setLoading(false);
@@ -1479,10 +1410,10 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   };
 
   const determineDownloadRole = useCallback(() => {
-    if (isAdmin) return "ROL74";
-    if (isMahasiswa) return "ROL23";
+    if (roleId === "ROL74") return "ROL74";
+    if (roleId === "ROL23") return "ROL23";
     return null;
-  }, [isAdmin, isMahasiswa]);
+  }, [roleId]);
 
   const validateDownloadPrerequisites = useCallback((username, role) => {
     if (!role) {
@@ -1610,33 +1541,26 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
     if (!userData) return;
 
-    if (isProdi) {
+    if (roleId === "ROL71") {
       if (prodiKonsentrasi !== null && !loadingProdiKonsentrasi) {
         loadData(1);       
         setShowRiwayat(true);
         setTimeout(() => loadDataRiwayat(1), 50);
-      } else {
-        // Waiting for prodiKonsentrasi to load before loading main data
       }
     } else {
       loadData(1);
-      
-      if (isWadir1 || isFinance || isAdmin) {
+      if (roleId === "ROL999" || roleId === "ROL01" || roleId === "ROL74") {
         setShowRiwayat(true);
         setTimeout(() => loadDataRiwayat(1), 50);
       }
     }
-  }, [isClient, ssoData, userData, loadData, loadDataRiwayat, isProdi, isWadir1, isFinance, isAdmin, router, prodiKonsentrasi, loadingProdiKonsentrasi]);
+  }, [isClient, ssoData, userData, loadData, loadDataRiwayat, roleId, router, prodiKonsentrasi, loadingProdiKonsentrasi]);
 
   const getEmptyStateMessage = useCallback(() => {
-    if (isMahasiswa) {
-      return "Anda belum memiliki pengajuan cuti akademik. Klik tombol 'Ajukan Cuti Akademik' untuk membuat pengajuan baru.";
-    }
-    if (isProdi) {
-      return "Tidak ada pengajuan cuti akademik. Anda dapat membuat pengajuan untuk mahasiswa dengan klik tombol 'Ajukan Cuti untuk Mahasiswa'.";
-    }
+    if (roleId === "ROL23") return "Anda belum memiliki pengajuan cuti akademik. Klik tombol 'Ajukan Cuti Akademik' untuk membuat pengajuan baru.";
+    if (roleId === "ROL71") return "Tidak ada pengajuan cuti akademik. Anda dapat membuat pengajuan untuk mahasiswa dengan klik tombol 'Ajukan Cuti untuk Mahasiswa'.";
     return "Tidak ada pengajuan cuti akademik yang perlu ditinjau saat ini.";
-  }, [isMahasiswa, isProdi]);
+  }, [roleId]);
 
   const shouldShowMahasiswaAddButton = useCallback(() => {
     return bebasTanggunganStatus === "OK";
@@ -1700,7 +1624,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         <h5>Daftar Pengajuan Cuti Akademik</h5>
         
         {/* Notifikasi Bebas Tanggungan untuk Mahasiswa */}
-        {isMahasiswa && bebasTanggunganStatus === "NOK" && (
+        {roleId === "ROL23" && bebasTanggunganStatus === "NOK" && (
           <div className="mb-3">
             <div className="alert alert-warning mb-2" role="alert">
               <i className="fas fa-exclamation-triangle me-2"></i>
@@ -1719,9 +1643,9 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         )}
         
         <div className="d-flex justify-content-between align-items-center mb-3">
-          {(isMahasiswa || isProdi) && (
+          {(roleId === "ROL23" || roleId === "ROL71") && (
             <>
-              {isMahasiswa ? (
+              {roleId === "ROL23" ? (
                 shouldShowMahasiswaAddButton() && isClient && userData?.permission?.includes("cuti_akademik.create") && (
                   <Button
                     classType="primary"
@@ -1815,15 +1739,14 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
               if (searchRiwayat && searchRiwayat.trim() !== "") {
                 params.append('search', searchRiwayat.trim());
               }
-              if (!isAdmin && userData?.username) {
-                const userIdentifier = isMahasiswa ? 
-                  (userData?.mhsId || userData?.nama || userData?.username) : 
-                  userData?.username;
+              if (roleId !== "ROL74" && userData?.username) {
+                const userIdentifier = roleId === "ROL23"
+                  ? (userData?.mhsId || userData?.nama || userData?.username)
+                  : userData?.username;
                 params.append('userId', userIdentifier);
               }
               
-              // Untuk prodi, tambahkan filter berdasarkan konsentrasi
-              if (isProdi && prodiKonsentrasi) {
+              if (roleId === "ROL71" && prodiKonsentrasi) {
                 const cleanKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, '').trim();
                 params.append('konsentrasi', cleanKonsentrasi);
               }

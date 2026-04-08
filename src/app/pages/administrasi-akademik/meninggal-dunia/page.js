@@ -47,54 +47,41 @@ export default function Page_MeninggalDunia() {
     
     const roleId = userData?.roleId || "";
 
-    const isProdi   = roleId === "ROL71";
-    const isWadir1  = roleId === "ROL999";
-    const isFinance = roleId === "ROL01";
-    const isAdmin   = roleId === "ROL74";
+    const [prodiKonsentrasi, setProdiKonsentrasi] = useState(null);
+    const [loadingProdiKonsentrasi, setLoadingProdiKonsentrasi] = useState(false);
 
-    const useProdiKonsentrasi = (isProdi, userData) => {
-        const [prodiKonsentrasi, setProdiKonsentrasi] = useState(null);
-        const [loadingProdiKonsentrasi, setLoadingProdiKonsentrasi] = useState(false);
+    useEffect(() => {
+        if (roleId !== "ROL71" || !userData) return;
 
-        useEffect(() => {
-            if (!isProdi || !userData) return;
-            
-            const loadProdiKonsentrasi = async () => {
-                try {
-                    setLoadingProdiKonsentrasi(true);
-                    const username = userData?.nama || userData?.username || "";
-                    
-                    if (!username) return;
+        const loadProdiKonsentrasi = async () => {
+            try {
+                setLoadingProdiKonsentrasi(true);
+                const username = userData?.nama || userData?.username || "";
 
-                    const response = await fetch(`${API_LINK}MeninggalDunia/GetKonsentrasiBySekprod?username=${username}`, {
-                        method: 'GET',
-                        headers: getAuthHeaders()
-                    });
-                    
-                    if (response.ok) {
-                        const data = await response.json();
-                        
-                        if (data && data.length > 0) {
-                            const konsentrasiName = data[0].nama || "";
-                            const cleanName = konsentrasiName.replaceAll(/\s*\([^)]*\)\s*$/g, '').trim();
-                            setProdiKonsentrasi(cleanName);
-                        }
+                if (!username) return;
+
+                const response = await fetch(`${API_LINK}MeninggalDunia/GetKonsentrasiBySekprod?username=${username}`, {
+                    method: 'GET',
+                    headers: getAuthHeaders()
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.length > 0) {
+                        const konsentrasiName = data[0].nama || "";
+                        const cleanName = konsentrasiName.replaceAll(/\s*\([^)]*\)\s*$/g, '').trim();
+                        setProdiKonsentrasi(cleanName);
                     }
-                } catch (error) {
-                    // Konsentrasi loading failed, continue silently
-                    if (error) { /* error handled by continuing without konsentrasi */ }
-                } finally {
-                    setLoadingProdiKonsentrasi(false);
                 }
-            };
+            } catch {
+                setProdiKonsentrasi(null);
+            } finally {
+                setLoadingProdiKonsentrasi(false);
+            }
+        };
 
-            loadProdiKonsentrasi();
-        }, [isProdi, userData]);
-
-        return { prodiKonsentrasi, loadingProdiKonsentrasi };
-    };
-
-    const { prodiKonsentrasi, loadingProdiKonsentrasi } = useProdiKonsentrasi(isProdi, userData);
+        loadProdiKonsentrasi();
+    }, [roleId, userData]);
 
 
     const [dataPengajuan, setDataPengajuan] = useState([]);
@@ -103,22 +90,14 @@ export default function Page_MeninggalDunia() {
     const [pengajuanTotalData, setPengajuanTotalData] = useState(0);
     const pengajuanPageSize = 10;
 
-    const filterDataByRole = useCallback((data, roles, prodiKonsentrasi) => {
-        const { isProdi, isAdmin } = roles;
-        
+    const filterDataByRole = useCallback((data, prodiKonsentrasi) => {
         return data.filter(item => {
             const currentStatus = item.status || item.mdu_status || "";
-            
-            if (isProdi) {
-                return filterProdiData(item, currentStatus, prodiKonsentrasi);
-            } else if (isAdmin) {
-                // Admin can see all data except Draft (which belongs to creators)
-                return currentStatus !== "Draft";
-            } else {
-                return currentStatus !== "Disetujui";
-            }
+            if (roleId === "ROL71") return filterProdiData(item, currentStatus, prodiKonsentrasi);
+            if (roleId === "ROL74") return currentStatus !== "Draft";
+            return currentStatus !== "Disetujui";
         });
-    }, []);
+    }, [roleId]);
 
     const filterProdiData = useCallback((item, currentStatus, prodiKonsentrasi) => {
         const itemProdi = item.prodi || item.kon_nama || item.konsentrasi || "";
@@ -160,24 +139,20 @@ export default function Page_MeninggalDunia() {
         const currentStatus = item.status || item.mdu_status || "";
         const hasUploadedSK = item.srt_no || item.suratNo || item.mdu_srt_no;
 
-        let actions = [];
+        let actions = ["Detail"];
 
-        if (isClient && userData?.permission?.includes("meninggal_dunia.view")) {
-            actions.push("Detail");
-        }
-
-        if (isProdi) {
+        if (roleId === "ROL71") {
             actions = [...actions, ...determineProdiActions(currentStatus)];
-        } else if (isWadir1) {
+        } else if (roleId === "ROL999") {
             actions = [...actions, ...determineWadir1Actions(currentStatus)];
-        } else if (isFinance) {
+        } else if (roleId === "ROL01") {
             actions = [...actions, ...determineFinanceActions(currentStatus)];
-        } else if (isAdmin) {
+        } else if (roleId === "ROL74") {
             actions = [...actions, ...determineAdminActions(currentStatus, hasUploadedSK)];
         }
 
-        return actions.length > 0 ? actions : ["Detail"];
-    }, [isClient, isProdi, isWadir1, isFinance, isAdmin, userData]);
+        return actions;
+    }, [roleId, isClient, userData]);
 
     const determineProdiActions = useCallback((currentStatus) => {
         let actions = [];
@@ -247,44 +222,30 @@ export default function Page_MeninggalDunia() {
             try {
                 setLoadingPengajuan(true);
 
-                const roles = { isProdi, isWadir1, isFinance, isAdmin };
-                
-                // Build API params but don't use pagination since backend returns all data
+                // Build API params
                 const params = new URLSearchParams();
                 params.append('mhsId', '%');
                 
-                // Set status filter based on role - but NOT for Prodi
-                if (isWadir1) {
+                if (roleId === "ROL999") {
                     params.append('status', "Belum Disetujui Wadir 1");
-                } else if (isFinance) {
+                } else if (roleId === "ROL01") {
                     params.append('status', "Belum Disetujui Finance");
-                } else if (isAdmin) {
+                } else if (roleId === "ROL74") {
                     params.append('status', "Menunggu Upload SK");
                 }
                 
-                // Set userId for Prodi to filter by their submissions
-                if (isProdi) {
+                if (roleId === "ROL71") {
                     const userId = userData?.nama || userData?.username || "";
-                    if (userId) {
-                        params.append('userId', userId);
-                    }
+                    if (userId) params.append('userId', userId);
                 }
 
-                // Always send role parameter
                 const backendRole = userData?.roleId || "";
-                if (backendRole) {
-                    params.append('role', backendRole);
-                }
+                if (backendRole) params.append('role', backendRole);
 
                 const url = `${API_LINK}MeninggalDunia/GetAllMeninggalDunia?${params}`;
-                const response = await fetch(url, {
-                    method: 'GET',
-                    headers: getAuthHeaders()
-                });
+                const response = await fetch(url, { method: 'GET', headers: getAuthHeaders() });
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
+                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
                 const responseText = await response.text();
                 let data;
@@ -301,10 +262,10 @@ export default function Page_MeninggalDunia() {
                     return;
                 }
 
-                const filteredData = filterDataByRole(actualData, roles, prodiKonsentrasi);
+                const filteredData = filterDataByRole(actualData, prodiKonsentrasi);
                 
                 // For Prodi users, sort by ID (newest first) to show latest drafts at top
-                if (isProdi) {
+                if (roleId === "ROL71") {
                     filteredData.sort((a, b) => {
                         // Use ID as primary sort (higher ID = newer)
                         const idA = Number.parseInt(a.id || 0);
@@ -346,7 +307,7 @@ export default function Page_MeninggalDunia() {
                 setLoadingPengajuan(false);
             }
         },
-        [isProdi, isWadir1, isFinance, isAdmin, userData, prodiKonsentrasi, filterDataByRole, pengajuanPageSize]
+        [roleId, userData, prodiKonsentrasi, filterDataByRole, pengajuanPageSize]
     );
 
     const extractArrayFromResponse = useCallback((data) => {
@@ -394,7 +355,7 @@ export default function Page_MeninggalDunia() {
             Status: currentStatus || "-",
         };
 
-        if (isAdmin) {
+        if (roleId === "ROL74") {
             let skColumn = "-";
             if (currentStatus === "Menunggu Upload SK") {
                 // Return HTML button for Print since TableRow.js won't handle this column
@@ -411,7 +372,7 @@ export default function Page_MeninggalDunia() {
         }
 
         return tableData;
-    }, [determineItemActions, getWadir1Icon, isAdmin]);
+    }, [determineItemActions, getWadir1Icon, roleId]);
 
     const [dataRiwayat, setDataRiwayat] = useState([]);
     const [loadingRiwayat, setLoadingRiwayat] = useState(true);
@@ -637,7 +598,7 @@ export default function Page_MeninggalDunia() {
                 if (sortParam) params.append('Sort', sortParam);
                 
                 // For Prodi users, add prodi filter based on their konsentrasi
-                if (isProdi && prodiKonsentrasi) {
+                if (roleId === "ROL71" && prodiKonsentrasi) {
                     params.append('Prodi', prodiKonsentrasi);
                 }
                 
@@ -671,7 +632,7 @@ export default function Page_MeninggalDunia() {
                 }
 
                 // Client-side filtering for prodi users
-                if (isProdi && prodiKonsentrasi) {
+                if (roleId === "ROL71" && prodiKonsentrasi) {
                     actualData = actualData.filter(item => {
                         const itemProdi = item.Prodi || item.prodi || "";
                         
@@ -747,7 +708,7 @@ export default function Page_MeninggalDunia() {
                 setLoadingRiwayat(false);
             }
         },
-        [userData, riwayatSearch, filterSort, filterProdi, riwayatPageSize, extractArrayFromResponse, isProdi, prodiKonsentrasi, applyAccurateSearchFilter, applyProdiFilter, applySorting]
+        [userData, riwayatSearch, filterSort, filterProdi, riwayatPageSize, extractArrayFromResponse, roleId, prodiKonsentrasi, applyAccurateSearchFilter, applyProdiFilter, applySorting]
     );
 
 
@@ -872,7 +833,7 @@ export default function Page_MeninggalDunia() {
             setSelectedMeninggalId(null);
             
             await loadPengajuan(pengajuanPage);
-            if (isProdi || isWadir1 || isFinance || isAdmin) {
+            if (roleId === "ROL71" || roleId === "ROL999" || roleId === "ROL01" || roleId === "ROL74") {
                 await loadRiwayat(riwayatPage);
             }
 
@@ -1044,7 +1005,7 @@ export default function Page_MeninggalDunia() {
             if (result?.message?.includes("Berhasil")) {
                 Toast.success(result.message);
                 
-                if (isProdi) {
+                if (roleId === "ROL71") {
                     const prodiCreatedApps = JSON.parse(sessionStorage.getItem('prodiCreatedMeninggalApps') || '[]');
                     const updatedApps = prodiCreatedApps.filter(appId => appId !== id);
                     sessionStorage.setItem('prodiCreatedMeninggalApps', JSON.stringify(updatedApps));
@@ -1133,9 +1094,9 @@ export default function Page_MeninggalDunia() {
 
         try {
             let role = "";
-            if (isProdi) role = "prodi";
-            else if (isWadir1) role = "wadir1";
-            else if (isFinance) role = "finance";
+            if (roleId === "ROL71") role = "prodi";
+            else if (roleId === "ROL999") role = "wadir1";
+            else if (roleId === "ROL01") role = "finance";
 
             const payload = { 
                 username: userData?.nama || userData?.username || userData?.userid || "",
@@ -1268,12 +1229,12 @@ export default function Page_MeninggalDunia() {
         }
         
         // For Prodi users, add prodi filter based on their konsentrasi
-        if (isProdi && prodiKonsentrasi) {
+        if (roleId === "ROL71" && prodiKonsentrasi) {
             params.append('Prodi', prodiKonsentrasi);
         }
         
         return params;
-    }, [riwayatSearch, filterSort, isProdi, prodiKonsentrasi]);
+    }, [riwayatSearch, filterSort, roleId, prodiKonsentrasi]);
 
     const downloadFile = useCallback((blob, response) => {
         // Create download link
@@ -1383,7 +1344,7 @@ export default function Page_MeninggalDunia() {
 
         if (!userData) return;
 
-        if (isProdi) {
+        if (roleId === "ROL71") {
             if (loadingProdiKonsentrasi || !prodiKonsentrasi) {
                 return;
             }
@@ -1391,10 +1352,10 @@ export default function Page_MeninggalDunia() {
 
         loadPengajuan(1);
         
-        if (isProdi || isWadir1 || isFinance || isAdmin) {
+        if (roleId === "ROL71" || roleId === "ROL999" || roleId === "ROL01" || roleId === "ROL74") {
             loadRiwayat(1);
         }
-    }, [isClient, ssoData, userData, loadPengajuan, loadRiwayat, isProdi, isWadir1, isFinance, isAdmin, router, prodiKonsentrasi, loadingProdiKonsentrasi]);
+    }, [isClient, ssoData, userData, loadPengajuan, loadRiwayat, roleId, router, prodiKonsentrasi, loadingProdiKonsentrasi]);
 
     // Early return for server-side rendering to prevent hydration mismatch
     if (!isClient) {
@@ -1414,12 +1375,12 @@ export default function Page_MeninggalDunia() {
         >
             {/* ======================== TABEL PENGAJUAN =========================== */}
             {/* Finance role should NOT see Pengajuan table - only Riwayat */}
-            {!isFinance && (
+            {!(roleId === "ROL01") && (
                 <div className="mb-4">
                     <h5>Daftar Pengajuan Meninggal Dunia</h5>
                     
                     <div className="d-flex justify-content-between align-items-center mb-3">
-                        {isClient && isProdi && userData?.permission?.includes("meninggal_dunia.create") && (
+                        {isClient && roleId === "ROL71" && userData?.permission?.includes("meninggal_dunia.create") && (
                             <Button
                                 classType="primary"
                                 label="+ Tambah"
@@ -1479,7 +1440,7 @@ export default function Page_MeninggalDunia() {
                                     <h5 className="text-muted">Tidak ada data pengajuan</h5>
                                     <p className="text-muted">
                                         {(() => {
-                                            if (isProdi) {
+                                            if (roleId === "ROL71") {
                                                 return "Tidak ada pengajuan meninggal dunia. Anda dapat membuat pengajuan untuk mahasiswa dengan klik tombol '+ Tambah'.";
                                             } else {
                                                 return "Tidak ada pengajuan meninggal dunia yang perlu ditinjau saat ini.";
@@ -1494,7 +1455,7 @@ export default function Page_MeninggalDunia() {
             )}
 
             {/* ======================== TABEL RIWAYAT =========================== */}
-            {(isProdi || isWadir1 || isFinance || isAdmin) && (
+            {(roleId === "ROL71" || roleId === "ROL999" || roleId === "ROL01" || roleId === "ROL74") && (
                 <div className="mt-5">
                     <h5>Daftar Riwayat Meninggal Dunia</h5>
                     

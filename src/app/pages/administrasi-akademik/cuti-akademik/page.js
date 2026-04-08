@@ -204,15 +204,6 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     return currentStatus !== "Draft";
   }, []);
 
-  const determineActions = useCallback((item, currentStatus, isDraft) => {
-    if (roleId === "ROL23") return determineMahasiswaActions(item, currentStatus, isDraft);
-    if (roleId === "ROL71") return determineProdiActions(currentStatus);
-    if (roleId === "ROL999") return determineWadir1Actions(currentStatus);
-    if (roleId === "ROL01") return determineFinanceActions(currentStatus);
-    if (roleId === "ROL74") return determineAdminActions(currentStatus);
-    return ["Detail"];
-  }, [roleId]);
-
   const determineMahasiswaActions = useCallback((item, currentStatus, isDraft) => {
     const approveProdiValue = item.approveProdi || item.cak_approve_prodi || "";
     
@@ -307,6 +298,15 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     
     return actions;
   }, [isClient, userData]);
+
+  const determineActions = useCallback((item, currentStatus, isDraft) => {
+    if (roleId === "ROL23") return determineMahasiswaActions(item, currentStatus, isDraft);
+    if (roleId === "ROL71") return determineProdiActions(currentStatus);
+    if (roleId === "ROL999") return determineWadir1Actions(currentStatus);
+    if (roleId === "ROL01") return determineFinanceActions(currentStatus);
+    if (roleId === "ROL74") return determineAdminActions(currentStatus);
+    return ["Detail"];
+  }, [roleId, determineMahasiswaActions, determineProdiActions, determineWadir1Actions, determineFinanceActions, determineAdminActions]);
 
   const formatTableRow = useCallback((item, index, startIndex, currentStatus, actions) => {
     const isDraft = currentStatus === "Draft";

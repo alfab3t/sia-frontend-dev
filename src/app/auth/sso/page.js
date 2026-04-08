@@ -116,7 +116,7 @@ const SsoPage = () => {
       if (data?.errorMessage === "") {
         Cookies.set("jwtToken", data.token);
         const userData = {
-          //permission: data.listPermission,
+          permission: data.listPermission,
           nama: ssoData.nama,
           role: selectedRole.namaRole,
           aplikasi: selectedRole.namaAplikasi,

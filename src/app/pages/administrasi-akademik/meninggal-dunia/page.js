@@ -135,6 +135,58 @@ export default function Page_MeninggalDunia() {
         return allowedStatuses.includes(statusLower);
     }, []);
 
+    const determineProdiActions = useCallback((currentStatus) => {
+        let actions = [];
+        const statusLower = currentStatus.toLowerCase().trim();
+        if (statusLower === "draft") {
+            if (isClient && userData?.permission?.includes("meninggal_dunia.edit")) actions.push("Edit");
+            if (isClient && userData?.permission?.includes("meninggal_dunia.delete")) actions.push("Delete");
+            if (isClient && userData?.permission?.includes("meninggal_dunia.create")) actions.push("Sent");
+        }
+        return actions;
+    }, [isClient, userData]);
+
+    const determineWadir1Actions = useCallback((currentStatus) => {
+        let actions = [];
+        if (currentStatus === "Belum Disetujui Wadir 1") {
+            if (isClient && userData?.permission?.includes("meninggal_dunia.approve_reject")) {
+                actions.push("Approve", "Reject");
+            }
+        }
+        return actions;
+    }, [isClient, userData]);
+
+    const determineFinanceActions = useCallback((currentStatus) => {
+        let actions = [];
+        if (currentStatus === "Belum Disetujui Finance") {
+            if (isClient && userData?.permission?.includes("meninggal_dunia.approve_reject")) {
+                actions.push("Approve", "Reject");
+            }
+        }
+        return actions;
+    }, [isClient, userData]);
+
+    const determineAdminActions = useCallback((currentStatus, hasUploadedSK) => {
+        let actions = [];
+        if (currentStatus === "Menunggu Upload SK") {
+            if (isClient && userData?.permission?.includes("meninggal_dunia.edit")) {
+                actions.push("Upload");
+            }
+        }
+        if (currentStatus === "Disetujui" && hasUploadedSK) {
+            if (isClient && userData?.permission?.includes("meninggal_dunia.print")) {
+                actions.push("DownloadSK");
+            }
+        }
+        if (currentStatus === "Disetujui") {
+            if (isClient && userData?.permission?.includes("meninggal_dunia.print")) {
+                actions.push("Print");
+            }
+        }
+        
+        return actions;
+    }, [isClient, userData]);
+
     const determineItemActions = useCallback((item) => {
         const currentStatus = item.status || item.mdu_status || "";
         const hasUploadedSK = item.srt_no || item.suratNo || item.mdu_srt_no;
@@ -152,70 +204,7 @@ export default function Page_MeninggalDunia() {
         }
 
         return actions;
-    }, [roleId, isClient, userData]);
-
-    const determineProdiActions = useCallback((currentStatus) => {
-        let actions = [];
-        
-        const statusLower = currentStatus.toLowerCase().trim();
-        
-        if (statusLower === "draft") {
-            if (isClient && userData?.permission?.includes("meninggal_dunia.edit")) actions.push("Edit");
-            if (isClient && userData?.permission?.includes("meninggal_dunia.delete")) actions.push("Delete");
-            if (isClient && userData?.permission?.includes("meninggal_dunia.create")) actions.push("Sent");
-        }
-        // For rejected status and other statuses (Belum Disetujui, Menunggu, etc.), only Detail is available (handled by determineItemActions)
-        return actions;
-    }, [isClient, userData]);
-
-    const determineWadir1Actions = useCallback((currentStatus) => {
-        let actions = [];
-        
-        if (currentStatus === "Belum Disetujui Wadir 1") {
-            if (isClient && userData?.permission?.includes("meninggal_dunia.approve_reject")) {
-                actions.push("Approve", "Reject");
-            }
-        }
-        return actions;
-    }, [isClient, userData]);
-
-    const determineFinanceActions = useCallback((currentStatus) => {
-        let actions = [];
-        
-        if (currentStatus === "Belum Disetujui Finance") {
-            if (isClient && userData?.permission?.includes("meninggal_dunia.approve_reject")) {
-                actions.push("Approve", "Reject");
-            }
-        }
-        return actions;
-    }, [isClient, userData]);
-
-    const determineAdminActions = useCallback((currentStatus, hasUploadedSK) => {
-        let actions = [];
-        
-        // Admin can upload SK for items waiting for SK upload
-        if (currentStatus === "Menunggu Upload SK") {
-            if (isClient && userData?.permission?.includes("meninggal_dunia.edit")) {
-                actions.push("Upload");
-            }
-        }
-        
-        // Admin can download SK for approved items
-        if (currentStatus === "Disetujui" && hasUploadedSK) {
-            if (isClient && userData?.permission?.includes("meninggal_dunia.print")) {
-                actions.push("DownloadSK");
-            }
-        }
-        
-        // Admin can print for approved items
-        if (currentStatus === "Disetujui") {
-            if (isClient && userData?.permission?.includes("meninggal_dunia.print")) {
-                actions.push("Print");
-            }
-        }
-        
-        return actions;
-    }, [isClient, userData]);
+    }, [roleId, determineProdiActions, determineWadir1Actions, determineFinanceActions, determineAdminActions]);
 
     const loadPengajuan = useCallback(
         async (page = 1) => {

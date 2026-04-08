@@ -125,7 +125,6 @@ const SsoPage = () => {
         };
         Cookies.set("userData", encryptId(JSON.stringify(userData)));
         localStorage.setItem("permissionData", JSON.stringify(data.listPermission));
-        //Cookies.set("permissionData", JSON.stringify(data.listPermission));
         Toast.success(
           "Berhasil login ke " +
             ` ${selectedRole.namaAplikasi} sebagai ${selectedRole.namaRole}`

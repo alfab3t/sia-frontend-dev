@@ -1364,7 +1364,7 @@ export default function Page_MeninggalDunia() {
         >
             {/* ======================== TABEL PENGAJUAN =========================== */}
             {/* Finance role should NOT see Pengajuan table - only Riwayat */}
-            {!(roleId === "ROL01") && (
+            {roleId !== "ROL01" && (
                 <div className="mb-4">
                     <h5>Daftar Pengajuan Meninggal Dunia</h5>
                     

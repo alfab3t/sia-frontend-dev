@@ -84,7 +84,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const [loadingProdiKonsentrasi, setLoadingProdiKonsentrasi] = useState(false);
 
   useEffect(() => {
-    if (!(roleId === "ROL23") || !userData) return;
+    if (roleId !== "ROL23" || !userData) return;
     
     const checkBebasTanggungan = async () => {
       try {
@@ -112,7 +112,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   }, [roleId, userData]);
   
   useEffect(() => {
-    if (!(roleId === "ROL71") || !userData) return;
+    if (roleId !== "ROL71" || !userData) return;
     
     const loadProdiKonsentrasi = async () => {
       try {
@@ -204,31 +204,30 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     return currentStatus !== "Draft";
   }, []);
 
+  const getMahasiswaDraftActions = useCallback(() => [
+    "Detail",
+    ...(isClient && userData?.permission?.includes("cuti_akademik.edit") ? ["Edit"] : []),
+    ...(isClient && userData?.permission?.includes("cuti_akademik.delete") ? ["Delete"] : []),
+    ...(isClient && userData?.permission?.includes("cuti_akademik.create") ? ["Sent"] : []),
+  ], [isClient, userData]);
+
   const determineMahasiswaActions = useCallback((item, currentStatus, isDraft) => {
     const approveProdiValue = item.approveProdi || item.cak_approve_prodi || "";
-    
-    if (isDraft) {
-      return [
-        "Detail",
-        ...(isClient && userData?.permission?.includes("cuti_akademik.edit") ? ["Edit"] : []),
-        ...(isClient && userData?.permission?.includes("cuti_akademik.delete") ? ["Delete"] : []),
-        ...(isClient && userData?.permission?.includes("cuti_akademik.create") ? ["Sent"] : []),
-      ];
-    }
-    
-    if (approveProdiValue && approveProdiValue !== "" && currentStatus !== "Disetujui") {
-      return ["Detail"];
-    }
-    
+
+    if (isDraft) return getMahasiswaDraftActions();
+
     if (currentStatus === "Disetujui") {
       return [
         "Detail",
         ...(isClient && userData?.permission?.includes("cuti_akademik.print") ? ["DownloadSK"] : []),
       ];
     }
-    
+
+    const isSubmittedByProdi = approveProdiValue !== "" && approveProdiValue;
+    if (isSubmittedByProdi) return ["Detail"];
+
     return ["Detail"];
-  }, [isClient, userData]);
+  }, [isClient, userData, getMahasiswaDraftActions]);
 
   const determineProdiActions = useCallback((currentStatus) => {
     if (currentStatus === "Draft") {

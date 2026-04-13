@@ -29,6 +29,12 @@ const getAuthHeaders = () => {
 export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const ssoData = useMemo(() => getSSOData(), []);
   const userData = useMemo(() => getUserData(), []);
+  const permissionData = useMemo(() => {
+    try {
+      const data = localStorage.getItem("permissionData");
+      return data ? JSON.parse(data) : [];
+    } catch { return []; }
+  }, []);
   
   const router = useRouter();
   const [dataCutiAkademik, setDataCutiAkademik] = useState([]);
@@ -206,10 +212,10 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
   const getMahasiswaDraftActions = useCallback(() => [
     "Detail",
-    ...(isClient && userData?.permission?.includes("cuti_akademik.edit") ? ["Edit"] : []),
-    ...(isClient && userData?.permission?.includes("cuti_akademik.delete") ? ["Delete"] : []),
-    ...(isClient && userData?.permission?.includes("cuti_akademik.create") ? ["Sent"] : []),
-  ], [isClient, userData]);
+    ...(permissionData?.includes("cuti_akademik.edit") ? ["Edit"] : []),
+    ...(permissionData?.includes("cuti_akademik.delete") ? ["Delete"] : []),
+    ...(permissionData?.includes("cuti_akademik.create") ? ["Sent"] : []),
+  ], [permissionData]);
 
   const determineMahasiswaActions = useCallback((item, currentStatus, isDraft) => {
     const approveProdiValue = item.approveProdi || item.cak_approve_prodi || "";
@@ -219,7 +225,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     if (currentStatus === "Disetujui") {
       return [
         "Detail",
-        ...(isClient && userData?.permission?.includes("cuti_akademik.print") ? ["DownloadSK"] : []),
+        ...(permissionData?.includes("cuti_akademik.print") ? ["DownloadSK"] : []),
       ];
     }
 
@@ -227,76 +233,62 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     if (isSubmittedByProdi) return ["Detail"];
 
     return ["Detail"];
-  }, [isClient, userData, getMahasiswaDraftActions]);
+  }, [permissionData, getMahasiswaDraftActions]);
 
   const determineProdiActions = useCallback((currentStatus) => {
     if (currentStatus === "Draft") {
       return [
         "Detail",
-        ...(isClient && userData?.permission?.includes("cuti_akademik.edit") ? ["Edit"] : []),
-        ...(isClient && userData?.permission?.includes("cuti_akademik.delete") ? ["Delete"] : []),
-        ...(isClient && userData?.permission?.includes("cuti_akademik.create") ? ["Sent"] : []),
+        ...(permissionData?.includes("cuti_akademik.edit") ? ["Edit"] : []),
+        ...(permissionData?.includes("cuti_akademik.delete") ? ["Delete"] : []),
+        ...(permissionData?.includes("cuti_akademik.create") ? ["Sent"] : []),
       ];
     }
-    
     if (currentStatus === "Belum Disetujui Prodi") {
       return [
         "Detail",
-        ...(isClient && userData?.permission?.includes("cuti_akademik.approve_reject") ? ["Approve", "Reject"] : []),
+        ...(permissionData?.includes("cuti_akademik.approve_reject") ? ["Approve", "Reject"] : []),
       ];
     }
-    
     return ["Detail"];
-  }, [isClient, userData]);
+  }, [permissionData]);
 
   const determineWadir1Actions = useCallback((currentStatus) => {
     if (currentStatus === "Belum Disetujui Wadir 1") {
       return [
         "Detail",
-        ...(isClient && userData?.permission?.includes("cuti_akademik.approve_reject") ? ["Approve", "Reject"] : []),
+        ...(permissionData?.includes("cuti_akademik.approve_reject") ? ["Approve", "Reject"] : []),
       ];
     }
     return ["Detail"];
-  }, [isClient, userData]);
+  }, [permissionData]);
 
   const determineFinanceActions = useCallback((currentStatus) => {
     if (currentStatus === "Belum Disetujui Finance") {
       return [
         "Detail",
-        ...(isClient && userData?.permission?.includes("cuti_akademik.approve_reject") ? ["Approve", "Reject"] : []),
+        ...(permissionData?.includes("cuti_akademik.approve_reject") ? ["Approve", "Reject"] : []),
       ];
     }
     return ["Detail"];
-  }, [isClient, userData]);
+  }, [permissionData]);
 
   const determineAdminActions = useCallback((currentStatus) => {
     let actions = ["Detail"];
-    
-    if (currentStatus === "Menunggu Upload SK") {
-      if (isClient && userData?.permission?.includes("cuti_akademik.edit")) {
-        actions.push("Upload");
-      }
+    if (currentStatus === "Menunggu Upload SK" && permissionData?.includes("cuti_akademik.edit")) {
+      actions.push("Upload");
     }
-    
-    const isAllApprovalsComplete = currentStatus && 
-      !currentStatus.includes("Belum Disetujui Prodi") && 
-      !currentStatus.includes("Belum Disetujui Wadir 1") && 
+    const isAllApprovalsComplete = currentStatus &&
+      !currentStatus.includes("Belum Disetujui Prodi") &&
+      !currentStatus.includes("Belum Disetujui Wadir 1") &&
       !currentStatus.includes("Belum Disetujui Finance") &&
       !currentStatus.includes("Draft") &&
       !currentStatus.includes("Ditolak");
-      
     const isReadyForSK = currentStatus === "Disetujui" || isAllApprovalsComplete;
-    
-    if (isReadyForSK && isClient && userData?.permission?.includes("cuti_akademik.edit")) {
-      actions.push("UploadSK");
-    }
-    
-    if (currentStatus === "Disetujui" && isClient && userData?.permission?.includes("cuti_akademik.print")) {
-      actions.push("DownloadSK");
-    }
-    
+    if (isReadyForSK && permissionData?.includes("cuti_akademik.edit")) actions.push("UploadSK");
+    if (currentStatus === "Disetujui" && permissionData?.includes("cuti_akademik.print")) actions.push("DownloadSK");
     return actions;
-  }, [isClient, userData]);
+  }, [permissionData]);
 
   const determineActions = useCallback((item, currentStatus, isDraft) => {
     if (roleId === "ROL23") return determineMahasiswaActions(item, currentStatus, isDraft);
@@ -1645,20 +1637,12 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
           {(roleId === "ROL23" || roleId === "ROL71") && (
             <>
               {roleId === "ROL23" ? (
-                shouldShowMahasiswaAddButton() && isClient && userData?.permission?.includes("cuti_akademik.create") && (
-                  <Button
-                    classType="primary"
-                    label="+ Tambah"
-                    onClick={handleAdd}
-                  />
+                shouldShowMahasiswaAddButton() && isClient && permissionData?.includes("cuti_akademik.create") && (
+                  <Button classType="primary" label="+ Tambah" onClick={handleAdd} />
                 )
               ) : (
-                isClient && userData?.permission?.includes("cuti_akademik.create") && (
-                  <Button
-                    classType="primary"
-                    label="+ Tambah"
-                    onClick={handleAdd}
-                  />
+                isClient && permissionData?.includes("cuti_akademik.create") && (
+                  <Button classType="primary" label="+ Tambah" onClick={handleAdd} />
                 )
               )}
             </>

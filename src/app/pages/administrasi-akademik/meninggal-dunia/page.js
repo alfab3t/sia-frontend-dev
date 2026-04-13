@@ -37,6 +37,12 @@ const getAuthHeadersForFormData = () => {
 export default function Page_MeninggalDunia() {
     const ssoData = useMemo(() => getSSOData(), []);
     const userData = useMemo(() => getUserData(), []);
+    const permissionData = useMemo(() => {
+        try {
+            const data = localStorage.getItem("permissionData");
+            return data ? JSON.parse(data) : [];
+        } catch { return []; }
+    }, []);
     const router = useRouter();
     
     const [isClient, setIsClient] = useState(false);
@@ -139,53 +145,42 @@ export default function Page_MeninggalDunia() {
         let actions = [];
         const statusLower = currentStatus.toLowerCase().trim();
         if (statusLower === "draft") {
-            if (isClient && userData?.permission?.includes("meninggal_dunia.edit")) actions.push("Edit");
-            if (isClient && userData?.permission?.includes("meninggal_dunia.delete")) actions.push("Delete");
-            if (isClient && userData?.permission?.includes("meninggal_dunia.create")) actions.push("Sent");
+            if (permissionData?.includes("meninggal_dunia.edit")) actions.push("Edit");
+            if (permissionData?.includes("meninggal_dunia.delete")) actions.push("Delete");
+            if (permissionData?.includes("meninggal_dunia.create")) actions.push("Sent");
         }
         return actions;
-    }, [isClient, userData]);
+    }, [permissionData]);
 
     const determineWadir1Actions = useCallback((currentStatus) => {
         let actions = [];
-        if (currentStatus === "Belum Disetujui Wadir 1") {
-            if (isClient && userData?.permission?.includes("meninggal_dunia.approve_reject")) {
-                actions.push("Approve", "Reject");
-            }
+        if (currentStatus === "Belum Disetujui Wadir 1" && permissionData?.includes("meninggal_dunia.approve_reject")) {
+            actions.push("Approve", "Reject");
         }
         return actions;
-    }, [isClient, userData]);
+    }, [permissionData]);
 
     const determineFinanceActions = useCallback((currentStatus) => {
         let actions = [];
-        if (currentStatus === "Belum Disetujui Finance") {
-            if (isClient && userData?.permission?.includes("meninggal_dunia.approve_reject")) {
-                actions.push("Approve", "Reject");
-            }
+        if (currentStatus === "Belum Disetujui Finance" && permissionData?.includes("meninggal_dunia.approve_reject")) {
+            actions.push("Approve", "Reject");
         }
         return actions;
-    }, [isClient, userData]);
+    }, [permissionData]);
 
     const determineAdminActions = useCallback((currentStatus, hasUploadedSK) => {
         let actions = [];
-        if (currentStatus === "Menunggu Upload SK") {
-            if (isClient && userData?.permission?.includes("meninggal_dunia.edit")) {
-                actions.push("Upload");
-            }
+        if (currentStatus === "Menunggu Upload SK" && permissionData?.includes("meninggal_dunia.edit")) {
+            actions.push("Upload");
         }
-        if (currentStatus === "Disetujui" && hasUploadedSK) {
-            if (isClient && userData?.permission?.includes("meninggal_dunia.print")) {
-                actions.push("DownloadSK");
-            }
+        if (currentStatus === "Disetujui" && hasUploadedSK && permissionData?.includes("meninggal_dunia.print")) {
+            actions.push("DownloadSK");
         }
-        if (currentStatus === "Disetujui") {
-            if (isClient && userData?.permission?.includes("meninggal_dunia.print")) {
-                actions.push("Print");
-            }
+        if (currentStatus === "Disetujui" && permissionData?.includes("meninggal_dunia.print")) {
+            actions.push("Print");
         }
-        
         return actions;
-    }, [isClient, userData]);
+    }, [permissionData]);
 
     const determineItemActions = useCallback((item) => {
         const currentStatus = item.status || item.mdu_status || "";
@@ -1239,7 +1234,7 @@ export default function Page_MeninggalDunia() {
     }, []);
 
     const handleExportExcel = async () => {
-        if (!isClient || !userData?.permission?.includes("meninggal_dunia.export")) {
+        if (!isClient || !permissionData?.includes("meninggal_dunia.export")) {
             Toast.error("Anda tidak memiliki izin untuk mengekspor data.");
             return;
         }
@@ -1356,7 +1351,7 @@ export default function Page_MeninggalDunia() {
                     <h5>Daftar Pengajuan Meninggal Dunia</h5>
                     
                     <div className="d-flex justify-content-between align-items-center mb-3">
-                        {isClient && roleId === "ROL71" && userData?.permission?.includes("meninggal_dunia.create") && (
+                        {isClient && roleId === "ROL71" && permissionData?.includes("meninggal_dunia.create") && (
                             <Button
                                 classType="primary"
                                 label="+ Tambah"
@@ -1442,7 +1437,7 @@ export default function Page_MeninggalDunia() {
                         searchPlaceholder=""
                         showAddButton={false}
                         showFilterButton={true}
-                        showExportButton={isClient && userData?.permission?.includes("meninggal_dunia.export")}
+                        showExportButton={isClient && permissionData?.includes("meninggal_dunia.export")}
                         exportButtonText="Unduh Excel"
                         filterContent={filterContentRiwayat}
                     />

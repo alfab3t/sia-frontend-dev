@@ -1,374 +1,116 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import MainContent from "@/components/layout/MainContent";
 import Toast from "@/components/common/Toast";
 import Button from "@/components/common/Button";
 import { useRouter, useParams } from "next/navigation";
 import { API_LINK } from "@/lib/constant";
-import { getUserData } from "@/context/user";
+import fetchData from "@/lib/fetch";
+import { getSSOData } from "@/context/user";
 import { decryptIdUrl, encryptIdUrl } from "@/lib/encryptor";
 import Cookies from "js-cookie";
 
-// Helper function to get authorization headers
-const getAuthHeaders = () => {
-  const token = Cookies.get("jwtToken");
-  return {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` })
-  };
+const statusBadgeMap = {
+  'draft': 'badge bg-info-subtle text-info',
+  'disetujui': 'badge bg-success-subtle text-success',
+  'belum disetujui wadir 1': 'badge bg-warning-subtle text-warning',
+  'belum disetujui finance': 'badge bg-warning-subtle text-warning',
+  'belum disetujui prodi': 'badge bg-warning-subtle text-warning',
+  'ditolak wadir1': 'badge bg-danger-subtle text-danger',
+  'ditolak prodi': 'badge bg-danger-subtle text-danger',
+  'ditolak finance': 'badge bg-danger-subtle text-danger',
+  'ditolak': 'badge bg-danger-subtle text-danger',
+  'menunggu upload sk': 'badge bg-warning-subtle text-warning',
+};
+
+const getStatusBadgeClass = (status) => {
+  if (!status) return 'badge bg-light text-dark';
+  return statusBadgeMap[status.toLowerCase()] || 'badge bg-light text-dark';
 };
 
 export default function DetailMeninggalDunia() {
   const router = useRouter();
   const params = useParams();
-  const userData = useMemo(() => getUserData(), []);
-
-  const [mounted, setMounted] = useState(false);
+  const ssoData = useMemo(() => getSSOData(), []);
   const [loading, setLoading] = useState(true);
   const [detailData, setDetailData] = useState(null);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const recordId = useMemo(() => {
     if (!params?.id) return null;
-    
-    try {
-      const urlDecodedId = decodeURIComponent(params.id);
-      const decryptedId = decryptIdUrl(urlDecodedId);
-      return decryptedId;
-    } catch {
-      try {
-        const decodedId = decodeURIComponent(params.id);
-        return decodedId;
-      } catch {
-        return params.id;
-      }
+    try { return decryptIdUrl(decodeURIComponent(params.id)); } catch {
+      try { return decodeURIComponent(params.id); } catch { return params.id; }
     }
   }, [params?.id]);
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!recordId) {
-      setLoading(false);
-      setError("ID tidak valid");
+      Toast.error("ID tidak valid.");
+      router.push("/pages/administrasi-akademik/meninggal-dunia");
       return;
     }
-
-    const loadData = async () => {
+    try {
       setLoading(true);
-      setError(null);
-      
-      try {
-        const encodedRecordId = encodeURIComponent(recordId);
+      const data = await fetchData(
+        `${API_LINK}MeninggalDunia/GetDetailMeninggalDunia/${encodeURIComponent(recordId)}`,
+        {}, "GET"
+      );
+      if (!data || typeof data !== 'object') throw new Error("Data tidak valid.");
+      setDetailData(data);
+    } catch (err) {
+      Toast.error(`Gagal memuat detail pengajuan: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [recordId, router]);
 
-        const response = await fetch(`${API_LINK}MeninggalDunia/GetDetailMeninggalDunia/${encodedRecordId}`, {
-          method: 'GET',
-          headers: getAuthHeaders()
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          
-          let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-          try {
-            const errorData = JSON.parse(errorText);
-            errorMessage = errorData.message || errorMessage;
-          } catch {
-          }
-          
-          throw new Error(errorMessage);
-        }
-
-        const responseText = await response.text();
-
-        let data;
-        try {
-          data = JSON.parse(responseText);
-        } catch {
-          throw new Error("Invalid JSON response from server");
-        }
-        
-        if (!data || typeof data !== 'object') {
-          throw new Error("Invalid data structure received from server");
-        }
-        
-        setDetailData(data);
-        
-      } catch (error) {
-        setError(error.message);
-        Toast.error(`Gagal memuat detail pengajuan: ${error.message}`);
-      } finally {
-        setLoading(false);
-      }
-    };
-
+  useEffect(() => {
+    if (!ssoData) {
+      Toast.error("Sesi anda habis. Silakan login kembali.");
+      router.push("/auth/login");
+      return;
+    }
     loadData();
-  }, [recordId]);
+  }, [ssoData, router, loadData]);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     router.push("/pages/administrasi-akademik/meninggal-dunia");
-  };
+  }, [router]);
 
-  const handleViewProfile = () => {
-    if (!detailData?.mhsId) {
-      Toast.error("ID Mahasiswa tidak tersedia.");
-      return;
-    }
-    
-    try {
-      const encryptedMhsId = encryptIdUrl(detailData.mhsId);
-      router.push(`/pages/Profil_Mahasiswa/${encryptedMhsId}`);
-    } catch {
-      Toast.error("Gagal membuka profil mahasiswa.");
-    }
-  };
+  const handleViewProfile = useCallback(() => {
+    if (!detailData?.mhsId) { Toast.error("ID Mahasiswa tidak tersedia."); return; }
+    try { router.push(`/pages/Profil_Mahasiswa/${encryptIdUrl(detailData.mhsId)}`); }
+    catch { Toast.error("Gagal membuka profil mahasiswa."); }
+  }, [detailData, router]);
 
-  const handleDownloadReport = async () => {
-    if (!recordId || !detailData?.lampiran) {
-      Toast.error("File lampiran tidak tersedia untuk didownload.");
-      return;
-    }
-    
+  const handleDownloadFile = useCallback(async (filename) => {
+    if (!filename) { Toast.error("File tidak tersedia."); return; }
     try {
-      const filename = detailData.lampiran;
       const token = Cookies.get("jwtToken");
-      const downloadUrl = `${API_LINK}MeninggalDunia/DownloadFileMeninggalDunia/${filename}`;
-      
-      const response = await fetch(downloadUrl, {
+      const response = await fetch(`${API_LINK}MeninggalDunia/DownloadFileMeninggalDunia/${filename}`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': '*/*'
-        }
+        headers: { 'Authorization': `Bearer ${token}`, 'Accept': '*/*' },
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      // Create blob from response
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       const blob = await response.blob();
       const url = globalThis.URL.createObjectURL(blob);
-      
-      // Create download link
       const link = document.createElement("a");
       link.href = url;
       link.setAttribute("download", filename);
       document.body.appendChild(link);
       link.click();
       link.remove();
-      
-      // Clean up
       globalThis.URL.revokeObjectURL(url);
-    } catch (error) {
-      Toast.error(`Gagal mendownload file: ${error.message}`);
+    } catch (err) {
+      Toast.error(`Gagal mendownload file: ${err.message}`);
     }
-  };
-
-  const handleDownloadSK = async () => {
-    if (!recordId || !detailData?.sk) {
-      Toast.error("File SK tidak tersedia untuk didownload.");
-      return;
-    }
-    
-    try {
-      const filename = detailData.sk;
-      const token = Cookies.get("jwtToken");
-      const downloadUrl = `${API_LINK}MeninggalDunia/DownloadFileMeninggalDunia/${filename}`;
-      
-      const response = await fetch(downloadUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': '*/*'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      // Create blob from response
-      const blob = await response.blob();
-      const url = globalThis.URL.createObjectURL(blob);
-      
-      // Create download link
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      
-      // Clean up
-      globalThis.URL.revokeObjectURL(url);
-    } catch (error) {
-      Toast.error(`Gagal mendownload file: ${error.message}`);
-    }
-  };
-
-  const handleDownloadSPKB = async () => {
-    if (!recordId || !detailData?.spkb) {
-      Toast.error("File SPKB tidak tersedia untuk didownload.");
-      return;
-    }
-    
-    try {
-      const filename = detailData.spkb;
-      const token = Cookies.get("jwtToken");
-      const downloadUrl = `${API_LINK}MeninggalDunia/DownloadFileMeninggalDunia/${filename}`;
-      
-      const response = await fetch(downloadUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': '*/*'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      // Create blob from response
-      const blob = await response.blob();
-      const url = globalThis.URL.createObjectURL(blob);
-      
-      // Create download link
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      
-      // Clean up
-      globalThis.URL.revokeObjectURL(url);
-    } catch (error) {
-      Toast.error(`Gagal mendownload file: ${error.message}`);
-    }
-  };
-
-  const getStatusBadgeClass = (status) => {
-    if (!status) return 'badge bg-light text-dark';
-    
-    const statusLower = status.toLowerCase();
-    
-    // Status badge mapping consistent with page.js
-    const statusBadgeMap = {
-      // Draft status
-      'draft': 'badge bg-info-subtle text-info',
-      
-      // Disetujui status
-      'disetujui': 'badge bg-success-subtle text-success',
-      
-      // Belum Disetujui statuses - use warning styling
-      'belum disetujui wadir 1': 'badge bg-warning-subtle text-warning',
-      'belum disetujui finance': 'badge bg-warning-subtle text-warning', 
-      'belum disetujui prodi': 'badge bg-warning-subtle text-warning',
-      
-      // Ditolak statuses - use danger styling
-      'ditolak wadir1': 'badge bg-danger-subtle text-danger',
-      'ditolak prodi': 'badge bg-danger-subtle text-danger',
-      'ditolak finance': 'badge bg-danger-subtle text-danger',
-      'ditolak': 'badge bg-danger-subtle text-danger', // Generic ditolak
-      
-      // Additional status variations
-      'menunggu upload sk': 'badge bg-warning-subtle text-warning',
-    };
-    
-    return statusBadgeMap[statusLower] || 'badge bg-light text-dark';
-  };
-
-  if (!mounted) {
-    return (
-      <MainContent
-        title="Detail Pengajuan Meninggal Dunia"
-        layout="Admin"
-        breadcrumb={[
-          { label: "Sistem Informasi Akademik" },
-          { label: "Administrasi Akademik" },
-          { label: "Meninggal Dunia" },
-          { label: "Detail Pengajuan" },
-        ]}
-      >
-        <div className="text-center py-4">
-          <div className="spinner-border" aria-live="polite">
-            <span className="visually-hidden">Loading...</span>
-          </div>
-          <p className="mt-2">Memuat halaman...</p>
-        </div>
-      </MainContent>
-    );
-  }
-
-  if (loading) {
-    return (
-      <MainContent
-        title="Detail Pengajuan Meninggal Dunia"
-        layout="Admin"
-        breadcrumb={[
-          { label: "Sistem Informasi Akademik" },
-          { label: "Administrasi Akademik" },
-          { label: "Meninggal Dunia" },
-          { label: "Detail Pengajuan" },
-        ]}
-      >
-        <div className="text-center py-4">
-          <div className="spinner-border" aria-live="polite">
-            <span className="visually-hidden">Loading...</span>
-          </div>
-          <p className="mt-2">Memuat data pengajuan...</p>
-        </div>
-      </MainContent>
-    );
-  }
-
-  if (error || !detailData) {
-    return (
-      <MainContent
-        title="Detail Pengajuan Meninggal Dunia"
-        layout="Admin"
-        breadcrumb={[
-          { label: "Sistem Informasi Akademik" },
-          { label: "Administrasi Akademik" },
-          { label: "Meninggal Dunia" },
-          { label: "Detail Pengajuan" },
-        ]}
-      >
-        <div className="text-center py-5">
-          <div className="mb-3">
-            <i className="fas fa-exclamation-triangle fa-3x text-warning"></i>
-          </div>
-          <h5 className="text-muted">Data tidak ditemukan</h5>
-          <p className="text-muted">
-            {error || "Pengajuan meninggal dunia tidak dapat ditemukan."}
-          </p>
-          <div className="mt-3">
-            <Button
-              classType="primary"
-              label="Kembali"
-              onClick={handleBack}
-            />
-          </div>
-          <div className="mt-3">
-            <small className="text-muted">
-              ID yang dicari: {recordId}
-            </small>
-          </div>
-        </div>
-      </MainContent>
-    );
-  }
+  }, []);
 
   return (
     <MainContent
       title="Detail Pengajuan Meninggal Dunia"
       layout="Admin"
+      loading={loading}
       breadcrumb={[
         { label: "Sistem Informasi Akademik" },
         { label: "Administrasi Akademik" },
@@ -376,187 +118,110 @@ export default function DetailMeninggalDunia() {
         { label: "Detail Pengajuan" },
       ]}
     >
-      <div className="card">
-        <div className="card-header">
-          <h5 className="card-title mb-0">
-            <i className="fas fa-info-circle me-2"></i>
-            <span>Informasi Pengajuan Meninggal Dunia</span>
-          </h5>
-        </div>
-        <div className="card-body">
-          {/* Data Mahasiswa */}
-          <div className="row mb-4">
-            <div className="col-12">
-              <h6 className="text-primary border-bottom pb-2 mb-3">
-                <i className="fas fa-user me-2"></i>Data Mahasiswa
-              </h6>
-            </div>
-            <div className="col-md-6 mb-3">
-              <h6 className="fw-bold">ID Mahasiswa:</h6>
-              <p className="form-control-plaintext">{detailData.mhsId || '-'}</p>
-            </div>
-            <div className="col-md-6 mb-3">
-              <h6 className="fw-bold">Nama Mahasiswa:</h6>
-              <p className="form-control-plaintext">{detailData.mhsNama || '-'}</p>
-            </div>
-            <div className="col-md-6 mb-3">
-              <h6 className="fw-bold">Program Studi:</h6>
-              <p className="form-control-plaintext">{detailData.konNama || '-'}</p>
-            </div>
-            <div className="col-md-6 mb-3">
-              <h6 className="fw-bold">Singkatan Prodi:</h6>
-              <p className="form-control-plaintext">{detailData.konSingkatan || '-'}</p>
-            </div>
-            <div className="col-md-6 mb-3">
-              <h6 className="fw-bold">Tahun Angkatan:</h6>
-              <p className="form-control-plaintext">{detailData.mhsAngkatan || '-'}</p>
-            </div>
-            <div className="col-md-12 mb-3">
-              <button 
-                type="button"
-                className="btn btn-link p-0 text-primary text-decoration-underline" 
-                onClick={handleViewProfile}
-              >
-                Lihat Profil Mahasiswa
-              </button>
-            </div>
+      {detailData && (
+        <div className="card">
+          <div className="card-header">
+            <h5 className="card-title mb-0">Informasi Pengajuan Meninggal Dunia</h5>
           </div>
-
-          {/* Data Pengajuan */}
-          <div className="row mb-4">
-            <div className="col-12">
-              <h6 className="text-primary border-bottom pb-2 mb-3">
-                <i className="fas fa-file-alt me-2"></i>Data Pengajuan
-              </h6>
-            </div>
-            <div className="col-md-6 mb-3">
-              <h6 className="fw-bold">Status:</h6>
-              <p className="form-control-plaintext">
-                <span className={getStatusBadgeClass(detailData.status)}>
-                  {detailData.status || 'Status tidak diketahui'}
-                </span>
-              </p>
-            </div>
-            <div className="col-md-6 mb-3">
-              <h6 className="fw-bold">Dibuat Oleh:</h6>
-              <p className="form-control-plaintext">
-                {(() => {
-                  const createdBy = detailData.createdBy || '';
-                  
-                  if (createdBy.toLowerCase() === 'system') {
-                    if (userData?.username) {
-                      return userData.username;
-                    }
-                    if (userData?.nama) {
-                      return userData.nama;
-                    }
-                    return 'System';
-                  }
-                  
-                  if (createdBy && createdBy !== '-') {
-                    return createdBy;
-                  }
-                  
-                  if (userData?.username) {
-                    return userData.username;
-                  }
-                  
-                  return '-';
-                })()}
-              </p>
-            </div>
-            <div className="col-md-12 mb-3">
-              <h6 className="fw-bold">Lampiran File:</h6>
-              <p className="form-control-plaintext mb-2">
-                {detailData.lampiran || 'Tidak ada file'}
-              </p>
-              {detailData.lampiran && (
-                <Button
-                  classType="outline-primary"
-                  label="Download Lampiran"
-                  onClick={handleDownloadReport}
-                  size="sm"
-                />
-              )}
-            </div>
-          </div>
-
-          {/* Data Persetujuan */}
-          {(detailData.approveDir1Date || detailData.approveDir1By) && (
+          <div className="card-body">
             <div className="row mb-4">
               <div className="col-12">
-                <h6 className="text-primary border-bottom pb-2 mb-3">
-                  <i className="fas fa-check-circle me-2"></i>Data Persetujuan
-                </h6>
+                <h6 className="text-primary border-bottom pb-2 mb-3">Data Mahasiswa</h6>
               </div>
               <div className="col-md-6 mb-3">
-                <h6 className="fw-bold">Tanggal Persetujuan Wadir 1:</h6>
-                <p className="form-control-plaintext">{detailData.approveDir1Date || '-'}</p>
+                <h6 className="fw-bold">ID Mahasiswa:</h6>
+                <p className="form-control-plaintext">{detailData.mhsId || '-'}</p>
               </div>
               <div className="col-md-6 mb-3">
-                <h6 className="fw-bold">Disetujui Oleh:</h6>
-                <p className="form-control-plaintext">{detailData.approveDir1By || '-'}</p>
+                <h6 className="fw-bold">Nama Mahasiswa:</h6>
+                <p className="form-control-plaintext">{detailData.mhsNama || '-'}</p>
+              </div>
+              <div className="col-md-6 mb-3">
+                <h6 className="fw-bold">Program Studi:</h6>
+                <p className="form-control-plaintext">{detailData.konNama || '-'}</p>
+              </div>
+              <div className="col-md-6 mb-3">
+                <h6 className="fw-bold">Tahun Angkatan:</h6>
+                <p className="form-control-plaintext">{detailData.mhsAngkatan || '-'}</p>
+              </div>
+              <div className="col-md-12 mb-3">
+                <button type="button" className="btn btn-link p-0 text-primary text-decoration-underline" onClick={handleViewProfile}>
+                  Lihat Profil Mahasiswa
+                </button>
               </div>
             </div>
-          )}
 
-          {/* Data Surat & Dokumen */}
-          {(detailData.suratNo || detailData.noSpkb || detailData.sk || detailData.spkb) && (
             <div className="row mb-4">
               <div className="col-12">
-                <h6 className="text-primary border-bottom pb-2 mb-3">
-                  <i className="fas fa-file-contract me-2"></i>Data Surat & Dokumen
-                </h6>
+                <h6 className="text-primary border-bottom pb-2 mb-3">Data Pengajuan</h6>
               </div>
               <div className="col-md-6 mb-3">
-                <h6 className="fw-bold">Nomor Surat:</h6>
-                <p className="form-control-plaintext">{detailData.suratNo || '-'}</p>
-              </div>
-              <div className="col-md-6 mb-3">
-                <h6 className="fw-bold">Nomor SPKB:</h6>
-                <p className="form-control-plaintext">{detailData.noSpkb || '-'}</p>
-              </div>
-              <div className="col-md-6 mb-3">
-                <h6 className="fw-bold">File SK:</h6>
-                <p className="form-control-plaintext mb-2">
-                  {detailData.sk ? detailData.sk : 'Belum ada file SK'}
+                <h6 className="fw-bold">Status:</h6>
+                <p className="form-control-plaintext">
+                  <span className={getStatusBadgeClass(detailData.status)}>{detailData.status || '-'}</span>
                 </p>
+              </div>
+              <div className="col-md-12 mb-3">
+                <h6 className="fw-bold">Lampiran File:</h6>
+                <p className="form-control-plaintext mb-2">{detailData.lampiran || 'Tidak ada file'}</p>
+                {detailData.lampiran && (
+                  <Button classType="outline-primary" label="Download Lampiran" onClick={() => handleDownloadFile(detailData.lampiran)} size="sm" />
+                )}
+              </div>
+            </div>
+
+            {(detailData.approveDir1Date || detailData.approveDir1By) && (
+              <div className="row mb-4">
+                <div className="col-12">
+                  <h6 className="text-primary border-bottom pb-2 mb-3">Data Persetujuan</h6>
+                </div>
+                <div className="col-md-6 mb-3">
+                  <h6 className="fw-bold">Tanggal Persetujuan Wadir 1:</h6>
+                  <p className="form-control-plaintext">{detailData.approveDir1Date || '-'}</p>
+                </div>
+                <div className="col-md-6 mb-3">
+                  <h6 className="fw-bold">Disetujui Oleh:</h6>
+                  <p className="form-control-plaintext">{detailData.approveDir1By || '-'}</p>
+                </div>
+              </div>
+            )}
+
+            {(detailData.suratNo || detailData.sk || detailData.spkb) && (
+              <div className="row mb-4">
+                <div className="col-12">
+                  <h6 className="text-primary border-bottom pb-2 mb-3">Data Surat & Dokumen</h6>
+                </div>
+                <div className="col-md-6 mb-3">
+                  <h6 className="fw-bold">Nomor Surat:</h6>
+                  <p className="form-control-plaintext">{detailData.suratNo || '-'}</p>
+                </div>
+                <div className="col-md-6 mb-3">
+                  <h6 className="fw-bold">Nomor SPKB:</h6>
+                  <p className="form-control-plaintext">{detailData.noSpkb || '-'}</p>
+                </div>
                 {detailData.sk && (
-                  <Button
-                    classType="outline-success"
-                    label="Download SK"
-                    onClick={handleDownloadSK}
-                    size="sm"
-                  />
+                  <div className="col-md-6 mb-3">
+                    <h6 className="fw-bold">File SK:</h6>
+                    <p className="form-control-plaintext mb-2">{detailData.sk}</p>
+                    <Button classType="outline-success" label="Download SK" onClick={() => handleDownloadFile(detailData.sk)} size="sm" />
+                  </div>
                 )}
-              </div>
-              <div className="col-md-6 mb-3">
-                <h6 className="fw-bold">File SPKB:</h6>
-                <p className="form-control-plaintext mb-2">
-                  {detailData.spkb ? detailData.spkb : 'Belum ada file SPKB'}
-                </p>
                 {detailData.spkb && (
-                  <Button
-                    classType="outline-success"
-                    label="Download SPKB"
-                    onClick={handleDownloadSPKB}
-                    size="sm"
-                  />
+                  <div className="col-md-6 mb-3">
+                    <h6 className="fw-bold">File SPKB:</h6>
+                    <p className="form-control-plaintext mb-2">{detailData.spkb}</p>
+                    <Button classType="outline-success" label="Download SPKB" onClick={() => handleDownloadFile(detailData.spkb)} size="sm" />
+                  </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Action Buttons */}
-          <div className="d-flex justify-content-end mt-4">
-            <Button
-              classType="secondary"
-              label="Kembali"
-              onClick={handleBack}
-            />
+            <div className="d-flex justify-content-end mt-4">
+              <Button classType="secondary" label="Kembali" onClick={handleBack} />
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </MainContent>
   );
 }

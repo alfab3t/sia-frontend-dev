@@ -10,686 +10,285 @@ import Label from "@/components/common/Label";
 import Input from "@/components/common/Input";
 import { useRouter, useParams } from "next/navigation";
 import { API_LINK } from "@/lib/constant";
+import fetchData from "@/lib/fetch";
 import { decryptIdUrl } from "@/lib/encryptor";
 import { getUserData } from "@/context/user";
 import Cookies from "js-cookie";
 
-// Helper function to get auth headers
-const getAuthHeaders = () => {
-  const token = Cookies.get("jwtToken");
-  return {
-    'Content-Type': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` })
-  };
-};
-
 const Editor = dynamic(() => import("@/components/common/Editor"), {
   ssr: false,
-  loading: () => (
-    <div className="p-3 border rounded text-muted">Loading Editor...</div>
-  ),
+  loading: () => <div className="p-3 border rounded text-muted">Loading Editor...</div>,
 });
+
+const maxFileSizeMB = 10 * 1024 * 1024;
+const allowedFileTypes = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png']);
+
+const validateFile = (file) => {
+  if (file.size > maxFileSizeMB) {
+    Toast.error(`File ${file.name} terlalu besar. Maksimal 10MB.`);
+    return false;
+  }
+  if (!allowedFileTypes.has(file.type)) {
+    Toast.error(`Format file ${file.name} tidak didukung. Gunakan PDF, JPG, JPEG, atau PNG.`);
+    return false;
+  }
+  return true;
+};
+
+const generateTahunAkademik = (angkatan) => {
+  if (!angkatan) {
+    const y = new Date().getFullYear();
+    return [
+      { Value: `${y-1}/${y}`, Text: `${y-1}/${y}` },
+      { Value: `${y}/${y+1}`, Text: `${y}/${y+1}` },
+      { Value: `${y+1}/${y+2}`, Text: `${y+1}/${y+2}` },
+    ];
+  }
+  const base = new Date().getFullYear() - 1;
+  const angkatanInt = Number.parseInt(angkatan, 10);
+  const list = [];
+  for (let i = base; i <= angkatanInt + 3; i++) {
+    list.push({ Value: `${i}/${i+1}`, Text: `${i}/${i+1}` });
+  }
+  return list;
+};
+
+const semesterData = [
+  { Value: "Ganjil", Text: "Ganjil" },
+  { Value: "Genap", Text: "Genap" },
+];
 
 export default function EditCutiAkademikPage() {
   const router = useRouter();
   const params = useParams();
   const userData = useMemo(() => getUserData(), []);
-  const [isClient, setIsClient] = useState(false);
 
   const roleId = userData?.roleId || "";
-  
   const isProdi = roleId === "ROL71";
   const isMahasiswa = roleId === "ROL23";
 
-  // Fix hydration mismatch
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  
   const realId = useMemo(() => {
-    try {
-      return decryptIdUrl(params?.id || "");
-    } catch {
-      return "";
-    }
+    try { return decryptIdUrl(params?.id || ""); } catch { return ""; }
   }, [params]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [prodiList, setProdiList] = useState([]);
-  const [studentList, setStudentList] = useState([]);
+  const [tahunAjaranData, setTahunAjaranData] = useState([]);
+  const [formData, setFormData] = useState({
+    tahunAjaran: "", semester: "", suratPernyataan: null, lampiran: null,
+    oldSurat: "", oldLampiran: "", konId: "", mhsId: "", angkatan: "",
+    menimbang: "", prodiNama: "", mahasiswaNama: "",
+  });
+  const [errors, setErrors] = useState({});
 
   const tahunAjaranRef = useRef();
   const semesterRef = useRef();
 
-  const [formData, setFormData] = useState({
-    tahunAjaran: "",
-    semester: "",
-    suratPernyataan: null,
-    lampiran: null,
-    oldSurat: "",
-    oldLampiran: "",
-    konId: "",
-    mhsId: "",
-    angkatan: "",
-    menimbang: "",
-    tahunAjaranOptions: [],
-    prodiNama: "",
-    mahasiswaNama: "",
-  });
-
-  const [errors, setErrors] = useState({});
-
+  // Load prodi list for prodi role
   useEffect(() => {
     const username = userData?.username || userData?.nama;
-    
-    if (!isProdi || !username) {
-      return;
-    }
-    
-    const loadProdi = async () => {
+    if (!isProdi || !username) return;
+    const load = async () => {
       try {
-        const response = await fetch(`${API_LINK}CutiAkademik/GetKonsentrasiBySekprod?username=${username}`, {
-          method: 'GET',
-          headers: getAuthHeaders()
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          
-          const mappedProdi = data.map(item => ({
-            Value: item.id,
-            Text: item.nama
-          }));
-          
-          setProdiList(mappedProdi);
-        } else {
-          Toast.error("Gagal memuat daftar program studi.");
-        }
+        const data = await fetchData(
+          `${API_LINK}CutiAkademik/GetKonsentrasiBySekprod?username=${username}`,
+          {}, "GET"
+        );
+        setProdiList((Array.isArray(data) ? data : []).map(item => ({
+          Value: item.id, Text: item.nama,
+        })));
       } catch {
         Toast.error("Terjadi kesalahan saat memuat daftar program studi.");
       }
     };
-
-    loadProdi();
+    load();
   }, [isProdi, userData?.username, userData?.nama]);
 
-  
-  const handleChange = (e) => {
-    const { name, value, files } = e.target;
-    
-    if (files?.[0]) {
-      const file = files[0];
-      const maxSize = 10 * 1024 * 1024; 
-      const allowedTypes = [
-        'application/pdf',
-        'image/jpeg',
-        'image/jpg',
-        'image/png'
-      ];
-      
-      
-      if (file.size > maxSize) {
-        Toast.error(`File ${file.name} terlalu besar. Maksimal 10MB.`);
-        e.target.value = ''; 
-        return;
-      }
-      
-      
-      if (!allowedTypes.includes(file.type)) {
-        Toast.error(`Format file ${file.name} tidak didukung. Gunakan PDF, JPG, JPEG, atau PNG.`);
-        e.target.value = ''; 
-        return;
-      }
-      
-      setFormData((prev) => ({
-        ...prev,
-        [name]: file,
-      }));
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
-    }
-    
-    
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: null }));
-    }
-  };
-
-  const handleEditorChange = useCallback((e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: null }));
-    }
-  }, [errors]);
-
-  
-  const fetchDetailData = async (realId) => {
-    const url = `${API_LINK}CutiAkademik/GetDetailCutiAkademik?id=${encodeURIComponent(realId)}`;
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: getAuthHeaders()
-    });
-    const raw = await res.text();
-
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      return null;
-    }
-
-    return data?.id ? data : null;
-  };
-
-  
-  const updateFormDataFromApi = (data) => {
-    setFormData(prev => ({
-      ...prev,
-      tahunAjaran: data.tahunAjaran || "",
-      semester: data.semester || "",
-      oldSurat: data.lampiranSP || "",
-      oldLampiran: data.lampiran || "",
-      suratPernyataan: null,
-      lampiran: null,
-      mhsId: data.mhsId || "",
-      menimbang: data.menimbang || "",
-      prodiNama: data.prodiNama || data.kon_nama || data.konsentrasi || "",
-      mahasiswaNama: data.mahasiswaNama || data.mhs_nama || data.namaMahasiswa || data.mahasiswa || data.nama || "",
-      angkatan: data.angkatan || data.mhs_angkatan || "",
-    }));
-  };
-
-  const fetchUserKonsentrasiList = async (username) => {
-    const konsentrasiResponse = await fetch(`${API_LINK}CutiAkademik/GetKonsentrasiBySekprod?username=${username}`, {
-      method: 'GET',
-      headers: getAuthHeaders()
-    });
-    if (!konsentrasiResponse.ok) {
-      return [];
-    }
-    return await konsentrasiResponse.json();
-  };
-
-  const fetchStudentsForKonsentrasi = async (konsentrasiId) => {
-    const studentsResponse = await fetch(`${API_LINK}CutiAkademik/GetMahasiswaByKonsentrasi?username=${username}`, {
-      method: 'GET',
-      headers: getAuthHeaders()
-    });
-    if (!studentsResponse.ok) {
-      return [];
-    }
-    return await studentsResponse.json();
-  };
-
-  const filterActiveStudents = (students) => {
-    return students.filter(item => {
-      const status = (item.mhsStatusKuliah || 
-                     item.statusKuliah || 
-                     item.status || 
-                     item.mhsStatus || 
-                     "").toLowerCase().trim();
-      
-      const inactiveKeywords = [
-        'lulus', 'graduated', 'drop', 'keluar', 'meninggal', 'died',
-        'tidak aktif', 'nonaktif', 'inactive', 'cuti', 'leave',
-        'putus studi', 'mengundurkan diri', 'resign'
-      ];
-      
-      const isInactive = inactiveKeywords.some(keyword => 
-        status.includes(keyword)
-      );
-      
-      return !isInactive;
-    });
-  };
-
-  const fetchStudentDetailAndGenerateOptions = async (mhsId) => {
-    try {
-      const detailResponse = await fetch(`${API_LINK}CutiAkademik/GetDetailMahasiswa?mahasiswaId=${mhsId}`, {
-        method: 'GET',
-        headers: getAuthHeaders()
-      });
-      if (!detailResponse.ok) {
-        return null;
-      }
-      
-      const detailData = await detailResponse.json();
-      const angkatan = detailData.mhsAngkatan;
-      
-      if (!angkatan) {
-        return null;
-      }
-      
-      const tahunSekarang = new Date().getFullYear() - 1;
-      const tahunAjaranOptions = [];
-      
-      for (let i = tahunSekarang; i <= angkatan + 3; i++) {
-        tahunAjaranOptions.push({
-          Value: `${i}/${i + 1}`,
-          Text: `${i}/${i + 1}`
-        });
-      }
-      
-      return {
-        angkatan: angkatan.toString(),
-        tahunAjaranOptions
-      };
-    } catch {
-      return null;
-    }
-  };
-
-  const findStudentKonsentrasi = async (mhsId, konsentrasiList, username) => {
-    for (const konsentrasi of konsentrasiList) {
-      const students = await fetchStudentsForKonsentrasi(konsentrasi.id);
-      const activeStudents = filterActiveStudents(students);
-      
-      const studentFound = activeStudents.find(s => s.mhsId === mhsId);
-      if (studentFound) {
-        const studentDetail = await fetchStudentDetailAndGenerateOptions(mhsId);
-        
-        if (studentDetail) {
-          setFormData(prev => ({
-            ...prev,
-            konId: konsentrasi.id,
-            angkatan: studentDetail.angkatan,
-            tahunAjaranOptions: studentDetail.tahunAjaranOptions
-          }));
-        } else {
-          setFormData(prev => ({
-            ...prev,
-            konId: konsentrasi.id,
-            angkatan: studentFound.angkatan || ""
-          }));
-        }
-        
-        setStudentList(activeStudents.map(item => ({
-          Value: item.mhsId,
-          Text: item.mhsNama
-        })));
-        
-        return true;
-      }
-    }
-    return false;
-  };
-
-  const handleProdiDataLoading = async (data) => {
-    if (!data.mhsId || !isProdi) {
-      return;
-    }
-
-    const username = userData?.username || userData?.nama;
-    
-    if (!username) {
-      return;
-    }
-
-    try {
-      const konsentrasiData = await fetchUserKonsentrasiList(username);
-      
-      await findStudentKonsentrasi(data.mhsId, konsentrasiData, username);
-    } catch {
-      
-    }
-  };
-
-  const loadDetailFromApi = useCallback(async () => {
-    try {
-      if (!realId) return;
-
-      const data = await fetchDetailData(realId);
-      if (!data) return;
-
-      updateFormDataFromApi(data);
-      await handleProdiDataLoading(data);
-
-    } finally {
-      setLoading(false);
-    }
-  }, [realId, isProdi, userData]);
-
+  // Load mahasiswa angkatan for mahasiswa role
   useEffect(() => {
     if (!isMahasiswa || !userData || !realId) return;
-    
-    const loadMahasiswaDataForEdit = async () => {
+    const load = async () => {
+      const mhsId = userData?.nama || userData?.mhsId || userData?.userid || userData?.username || "";
+      if (!mhsId) return;
       try {
-        const mhsId = userData?.nama || userData?.mhsId || userData?.userid || userData?.username || "";
-        
-        if (!mhsId) {
-          return;
-        }
-
-        const response = await fetch(`${API_LINK}CutiAkademik/GetDetailMahasiswa?mahasiswaId=${mhsId}`, {
-          method: 'GET',
-          headers: getAuthHeaders()
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-
-          setFormData(prev => {
-            const newFormData = {
-              ...prev,
-              angkatan: data.mhsAngkatan?.toString() || ""
-            };
-            return newFormData;
-          });
-          
-        } else {
-          // Error response from API
-        }
+        const data = await fetchData(
+          `${API_LINK}CutiAkademik/GetDetailMahasiswa?mahasiswaId=${mhsId}`,
+          {}, "GET"
+        );
+        setFormData(prev => ({ ...prev, angkatan: data?.mhsAngkatan?.toString() || "" }));
       } catch {
-        
+        // silently fail
       }
     };
-
-    loadMahasiswaDataForEdit();
+    load();
   }, [isMahasiswa, userData, realId]);
 
-  
-  const generateTahunAkademik = (angkatan) => {
-    if (!angkatan) {
-      const currentYear = new Date().getFullYear();
-      return [
-        { Value: `${currentYear-1}/${currentYear}`, Text: `${currentYear-1}/${currentYear}` },
-        { Value: `${currentYear}/${currentYear+1}`, Text: `${currentYear}/${currentYear+1}` },
-        { Value: `${currentYear+1}/${currentYear+2}`, Text: `${currentYear+1}/${currentYear+2}` },
-      ];
-    }
-
-    const tahunSekarang = new Date().getFullYear() - 1;
-    const angkatanInt = Number.parseInt(angkatan, 10);
-    const tahunAkademikList = [];
-
-    for (let i = tahunSekarang; i <= angkatanInt + 3; i++) {
-      const tahunAkademik = `${i}/${i + 1}`;
-      tahunAkademikList.push({
-        Value: tahunAkademik,
-        Text: tahunAkademik
-      });
-    }
-
-    return tahunAkademikList;
-  };
-
-  const [tahunAjaranData, setTahunAjaranData] = useState([]);
-
+  // Generate tahun ajaran options
   useEffect(() => {
-    if ((isProdi || isMahasiswa) && formData.angkatan) {
-      // Untuk halaman edit, hanya tampilkan tahun akademik yang sedang diedit
-      if (formData.tahunAjaran) {
-        // Jika sudah ada tahun ajaran dari data yang diedit, hanya tampilkan itu saja
-        setTahunAjaranData([{
-          Value: formData.tahunAjaran,
-          Text: formData.tahunAjaran
-        }]);
-      } else {
-        // Jika belum ada, generate seperti biasa (fallback)
-        const newTahunAkademikData = generateTahunAkademik(formData.angkatan);
-        setTahunAjaranData(newTahunAkademikData);
-      }
-    } else if (!isProdi && !isMahasiswa) {
-      // Untuk role lain, jika sudah ada tahun ajaran, hanya tampilkan itu saja
-      if (formData.tahunAjaran) {
-        setTahunAjaranData([{
-          Value: formData.tahunAjaran,
-          Text: formData.tahunAjaran
-        }]);
-      } else {
-        const defaultTahunAkademik = generateTahunAkademik(null);
-        setTahunAjaranData(defaultTahunAkademik);
-      }
+    if (formData.tahunAjaran) {
+      setTahunAjaranData([{ Value: formData.tahunAjaran, Text: formData.tahunAjaran }]);
+    } else if (formData.angkatan) {
+      setTahunAjaranData(generateTahunAkademik(formData.angkatan));
+    } else {
+      setTahunAjaranData(generateTahunAkademik(null));
     }
-  }, [formData.angkatan, formData.tahunAjaran, isProdi, isMahasiswa]);
+  }, [formData.angkatan, formData.tahunAjaran]);
 
-  useEffect(() => {
-    if (!isProdi && !isMahasiswa) {
-      // Untuk role lain, jika sudah ada tahun ajaran, hanya tampilkan itu saja
-      if (formData.tahunAjaran) {
-        setTahunAjaranData([{
-          Value: formData.tahunAjaran,
-          Text: formData.tahunAjaran
-        }]);
-      } else {
-        const defaultTahunAkademik = generateTahunAkademik(null);
-        setTahunAjaranData(defaultTahunAkademik);
-      }
-    }
-  }, [isProdi, isMahasiswa, formData.tahunAjaran]);
-
-  useEffect(() => {
+  // Load detail data
+  const loadDetailFromApi = useCallback(async () => {
     if (!realId) {
       Toast.error("ID tidak valid.");
       router.push("/pages/administrasi-akademik/cuti-akademik");
       return;
     }
-
-    const cached = sessionStorage.getItem("editCutiDraft");
-
-    if (cached) {
-      const data = JSON.parse(cached);
-
+    try {
+      const data = await fetchData(
+        `${API_LINK}CutiAkademik/GetDetailCutiAkademik?id=${encodeURIComponent(realId)}`,
+        {}, "GET"
+      );
+      if (!data?.id) return;
       setFormData(prev => ({
         ...prev,
         tahunAjaran: data.tahunAjaran || "",
         semester: data.semester || "",
         oldSurat: data.lampiranSP || "",
         oldLampiran: data.lampiran || "",
-        suratPernyataan: null,
-        lampiran: null,
+        suratPernyataan: null, lampiran: null,
         mhsId: data.mhsId || "",
         menimbang: data.menimbang || "",
+        prodiNama: data.prodiNama || data.kon_nama || data.konsentrasi || "",
+        mahasiswaNama: data.mahasiswaNama || data.mhs_nama || data.mahasiswa || "",
+        angkatan: data.angkatan || data.mhs_angkatan || "",
       }));
-
+    } catch (err) {
+      Toast.error("Gagal memuat data: " + err.message);
+    } finally {
       setLoading(false);
-    } else {
-      loadDetailFromApi();
     }
-  }, [realId, loadDetailFromApi, router]);
+  }, [realId, router]);
 
-  const validate = () => {
+  useEffect(() => {
+    loadDetailFromApi();
+  }, [loadDetailFromApi]);
+
+  const handleChange = useCallback((e) => {
+    const { name, value, files } = e.target;
+    if (files?.[0]) {
+      const file = files[0];
+      if (!validateFile(file)) { e.target.value = ''; return; }
+      setFormData(prev => ({ ...prev, [name]: file }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
+  }, [errors]);
+
+  const handleEditorChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
+  }, [errors]);
+
+  const validate = useCallback(() => {
     const newErrors = {};
-    
     if (isProdi) {
-      // Untuk edit, tidak perlu validasi konId dan mhsId karena sudah ada dan disabled
       if (!formData.menimbang || formData.menimbang.trim() === "" || formData.menimbang === "<p></p>") {
         newErrors.menimbang = "Menimbang/pertimbangan wajib diisi.";
       }
     }
-    
     if (!formData.tahunAjaran) newErrors.tahunAjaran = "Tahun akademik wajib diisi.";
     if (!formData.semester) newErrors.semester = "Semester wajib diisi.";
-    
     setErrors(newErrors);
-    
     if (Object.keys(newErrors).length > 0) {
       Toast.error("Mohon lengkapi semua field yang wajib diisi.");
       return false;
     }
-    
     return true;
-  };
+  }, [formData, isProdi]);
 
   const buildFormData = useCallback(() => {
     const fd = new FormData();
     fd.append("Id", realId);
     fd.append("TahunAjaran", formData.tahunAjaran);
     fd.append("Semester", formData.semester);
-
-    if (formData.suratPernyataan && formData.suratPernyataan instanceof File) {
+    if (formData.suratPernyataan instanceof File) {
       fd.append("LampiranSuratPengajuan", formData.suratPernyataan, formData.suratPernyataan.name);
     }
-
-    if (formData.lampiran && formData.lampiran instanceof File) {
+    if (formData.lampiran instanceof File) {
       fd.append("Lampiran", formData.lampiran, formData.lampiran.name);
     }
-
     if (isProdi) {
       fd.append("MhsId", formData.mhsId);
       fd.append("Menimbang", formData.menimbang);
     }
-
     const modifiedBy = userData?.mhsId || userData?.userid || userData?.username || userData?.nama || "SYSTEM";
     fd.append("ModifiedBy", modifiedBy);
-
     return fd;
   }, [realId, formData, isProdi, userData]);
 
-  const parseErrorMessage = useCallback((res, raw) => {
-    let errorMessage = `HTTP ${res.status}: ${res.statusText}`;
-    try {
-      const errorData = JSON.parse(raw);
-      if (errorData.message) {
-        errorMessage = errorData.message;
-      } else if (errorData.error) {
-        errorMessage = errorData.error;
-      } else if (errorData.errors) {
-        const validationErrors = Object.values(errorData.errors).flat();
-        errorMessage = validationErrors.join(', ');
-      }
-    } catch {
-      errorMessage = `${errorMessage}\n\nServer response: ${raw}`;
-    }
-    return errorMessage;
-  }, []);
-
-  const handleSubmitSuccess = useCallback((result) => {
-    if (result?.message?.toLowerCase().includes("berhasil")) {
-      Toast.success("Perubahan berhasil disimpan.");
-      sessionStorage.removeItem("editCutiDraft");
-      router.push("/pages/administrasi-akademik/cuti-akademik");
-    } else {
-      Toast.error(result?.message || "Gagal menyimpan perubahan.");
-    }
-  }, [router]);
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
-    if (saving) return;
-    if (!validate()) return;
-
+    if (saving || !validate()) return;
     setSaving(true);
-
     try {
       const fd = buildFormData();
-      const url = `${API_LINK}CutiAkademik/UpdateCutiAkademik/${realId}`;
       const token = Cookies.get("jwtToken");
-      
-      const res = await fetch(url, {
+      const res = await fetch(`${API_LINK}CutiAkademik/UpdateCutiAkademik/${realId}`, {
         method: "PUT",
-        headers: {
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        },
+        headers: { ...(token && { 'Authorization': `Bearer ${token}` }) },
         body: fd,
       });
-
       const raw = await res.text();
-      
       if (!res.ok) {
-        const errorMessage = parseErrorMessage(res, raw);
-        Toast.error(`Gagal menyimpan: ${errorMessage}`);
+        let msg = `HTTP ${res.status}`;
+        try { const e = JSON.parse(raw); msg = e.message || e.error || msg; } catch { /* use default */ }
+        Toast.error(`Gagal menyimpan: ${msg}`);
         return;
       }
-      
       let result;
-      try {
-        result = JSON.parse(raw);
-      } catch {
+      try { result = JSON.parse(raw); } catch {
         Toast.error("Response server tidak valid.");
         return;
       }
-
-      handleSubmitSuccess(result);
+      if (result?.message?.toLowerCase().includes("berhasil")) {
+        Toast.success("Perubahan berhasil disimpan.");
+        router.push("/pages/administrasi-akademik/cuti-akademik");
+      } else {
+        Toast.error(result?.message || "Gagal menyimpan perubahan.");
+      }
     } catch (err) {
       Toast.error(err.message);
     } finally {
       setSaving(false);
     }
-  };
+  }, [saving, validate, buildFormData, realId, router]);
 
-  const handleCancel = () => router.back();
-
-  const getPageTitle = () => {
-    if (!isClient) return "Edit Pengajuan Cuti Akademik";
-    if (isProdi) return "Edit Pengajuan Cuti Akademik (Prodi)";
-    if (isMahasiswa) return "Edit Pengajuan Cuti Akademik (Mahasiswa)";
-    return "Edit Pengajuan Cuti Akademik";
-  };
-
-  const getBreadcrumbLabel = () => {
-    if (!isClient) return "Edit Pengajuan";
-    if (isProdi) return "Edit Pengajuan (Prodi)";
-    if (isMahasiswa) return "Edit Pengajuan (Mahasiswa)";
-    return "Edit Pengajuan";
-  };
-
-  const semesterData = [
-    { Value: "Ganjil", Text: "Ganjil" },
-    { Value: "Genap", Text: "Genap" },
-  ];
-
+  const handleCancel = useCallback(() => router.back(), [router]);
 
   return (
     <MainContent
       layout="Admin"
       loading={loading}
-      title={getPageTitle()}
+      title={isProdi ? "Edit Pengajuan Cuti Akademik (Prodi)" : "Edit Pengajuan Cuti Akademik"}
       breadcrumb={[
         { label: "Sistem Informasi Akademik" },
         { label: "Administrasi Akademik" },
         { label: "Cuti Akademik" },
-        { label: getBreadcrumbLabel() },
+        { label: isProdi ? "Edit Pengajuan (Prodi)" : "Edit Pengajuan" },
       ]}
     >
       <form onSubmit={handleSubmit}>
-        {isClient && isProdi && (
+        {isProdi && (
           <div className="row mt-3">
             <div className="col-lg-4">
-              <Input
-                label="Program Studi"
-                name="konId"
-                id="konId"
-                value={formData.prodiNama || prodiList.find(p => p.Value === formData.konId)?.Text || ""}
-                onChange={() => {}}
-                disabled={true}
-                required={true}
-              />
+              <Input label="Program Studi" name="konId" value={formData.prodiNama || prodiList.find(p => p.Value === formData.konId)?.Text || ""} onChange={() => {}} disabled={true} required={true} />
             </div>
-
             <div className="col-lg-4">
-              <Input
-                label="Mahasiswa"
-                name="mhsId"
-                id="mhsId"
-                value={formData.mahasiswaNama || studentList.find(s => s.Value === formData.mhsId)?.Text || ""}
-                onChange={() => {}}
-                disabled={true}
-                required={true}
-              />
+              <Input label="Mahasiswa" name="mhsId" value={formData.mahasiswaNama || ""} onChange={() => {}} disabled={true} required={true} />
             </div>
-
             <div className="col-lg-4">
-              <Input
-                label="Angkatan"
-                name="angkatan"
-                id="angkatan"
-                value={formData.angkatan}
-                onChange={() => {}}
-                disabled={true}
-                required={false}
-              />
+              <Input label="Angkatan" name="angkatan" value={formData.angkatan} onChange={() => {}} disabled={true} required={false} />
             </div>
           </div>
         )}
@@ -708,11 +307,10 @@ export default function EditCutiAkademikPage() {
               errorMessage={errors.tahunAjaran}
               isDisabled={(isProdi && !formData.mhsId) || (isMahasiswa && !formData.angkatan)}
             />
-            {isClient && isMahasiswa && !formData.angkatan && (
+            {isMahasiswa && !formData.angkatan && (
               <small className="text-muted">Memuat opsi tahun akademik...</small>
             )}
           </div>
-
           <div className="col-lg-6">
             <DropDown
               ref={semesterRef}
@@ -730,76 +328,32 @@ export default function EditCutiAkademikPage() {
 
         <div className="row mt-4">
           <div className="col-lg-6">
-            <Label
-              text={isClient && isProdi ? "Berkas Surat Pernyataan" : "Surat Pernyataan"}
-              htmlFor="suratPernyataan"
-              required={false}
-            />
-            <input
-              type="file"
-              className="form-control rounded-4 blue-element"
-              name="suratPernyataan"
-              onChange={handleChange}
-            />
-            {errors.suratPernyataan && (
-              <span className="fw-normal text-danger">{errors.suratPernyataan}</span>
-            )}
-            <small className="text-muted">File sebelumnya: {formData.oldSurat || "-"}</small>
-            <br />
-            <small className="text-muted">Upload file baru jika ingin mengganti. Format yang didukung: PDF, JPG, JPEG, PNG (Maksimal 10MB)</small>
+            <Label text={isProdi ? "Berkas Surat Pernyataan" : "Surat Pernyataan"} htmlFor="suratPernyataan" required={false} />
+            <input type="file" className="form-control rounded-4 blue-element" name="suratPernyataan" onChange={handleChange} accept=".pdf,.jpg,.jpeg,.png" />
+            {errors.suratPernyataan && <span className="fw-normal text-danger">{errors.suratPernyataan}</span>}
+            <small className="text-muted">File sebelumnya: {formData.oldSurat || "-"}</small><br />
+            <small className="text-muted">Upload file baru jika ingin mengganti. Format: PDF, JPG, JPEG, PNG (Maks 10MB)</small>
           </div>
-
           <div className="col-lg-6">
-            <Label
-              text={isClient && isProdi ? "Berkas Lampiran" : "Lampiran"}
-              htmlFor="lampiran"
-              required={false}
-            />
-            <input
-              type="file"
-              className="form-control rounded-4 blue-element"
-              name="lampiran"
-              onChange={handleChange}
-            />
-            {errors.lampiran && (
-              <span className="fw-normal text-danger">{errors.lampiran}</span>
-            )}
-            <small className="text-muted">File sebelumnya: {formData.oldLampiran || "-"}</small>
-            <br />
-            <small className="text-muted">Upload file baru jika ingin mengganti. Format yang didukung: PDF, JPG, JPEG, PNG (Maksimal 10MB)</small>
+            <Label text={isProdi ? "Berkas Lampiran" : "Lampiran"} htmlFor="lampiran" required={false} />
+            <input type="file" className="form-control rounded-4 blue-element" name="lampiran" onChange={handleChange} accept=".pdf,.jpg,.jpeg,.png" />
+            {errors.lampiran && <span className="fw-normal text-danger">{errors.lampiran}</span>}
+            <small className="text-muted">File sebelumnya: {formData.oldLampiran || "-"}</small><br />
+            <small className="text-muted">Upload file baru jika ingin mengganti. Format: PDF, JPG, JPEG, PNG (Maks 10MB)</small>
           </div>
         </div>
 
-        {isClient && isProdi && (
+        {isProdi && (
           <div className="row mt-4">
             <div className="col-lg-12">
-              <Editor
-                label="Menimbang"
-                name="menimbang"
-                value={formData.menimbang}
-                onChange={handleEditorChange}
-                error={errors.menimbang}
-              />
-              
+              <Editor label="Menimbang" name="menimbang" value={formData.menimbang} onChange={handleEditorChange} error={errors.menimbang} />
             </div>
           </div>
         )}
 
         <div className="d-flex justify-content-end mt-4 gap-2">
-          <Button
-            classType="secondary"
-            label="Batal"
-            type="button"
-            onClick={handleCancel}
-            isDisabled={saving}
-          />
-          <Button
-            classType="primary"
-            iconName="save"
-            label={saving ? "Menyimpan..." : "Simpan Editor"}
-            type="submit"
-            isDisabled={saving}
-          />
+          <Button classType="secondary" label="Batal" type="button" onClick={handleCancel} isDisabled={saving} />
+          <Button classType="primary" iconName="save" label={saving ? "Menyimpan..." : "Simpan"} type="submit" isDisabled={saving} />
         </div>
       </form>
     </MainContent>

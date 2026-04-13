@@ -9,44 +9,29 @@ import DropDown from "@/components/common/Dropdown";
 import Label from "@/components/common/Label";
 import { useRouter } from "next/navigation";
 import { API_LINK } from "@/lib/constant";
+import fetchData from "@/lib/fetch";
 import { getUserData } from "@/context/user";
 import Cookies from "js-cookie";
 
-// Helper function to get auth headers
-const getAuthHeaders = () => {
-  const token = Cookies.get("jwtToken");
-  return {
-    'Content-Type': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` })
-  };
-};
-
 const Editor = dynamic(() => import("@/components/common/Editor"), {
   ssr: false,
-  loading: () => (
-    <div className="p-3 border rounded text-muted">Loading Editor...</div>
-  ),
+  loading: () => <div className="p-3 border rounded text-muted">Loading Editor...</div>,
 });
 
-const validateFileSize = (file, maxSize = 10 * 1024 * 1024) => {
-  if (file.size > maxSize) {
+const maxFileSizeMB = 10 * 1024 * 1024;
+const allowedFileTypes = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/jpeg', 'image/jpg', 'image/png',
+]);
+
+const validateFile = (file) => {
+  if (file.size > maxFileSizeMB) {
     Toast.error(`File ${file.name} terlalu besar. Maksimal 10MB.`);
     return false;
   }
-  return true;
-};
-
-const validateFileType = (file) => {
-  const allowedTypes = [
-    'application/pdf',
-    'application/msword', 
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'image/jpeg',
-    'image/jpg',
-    'image/png'
-  ];
-  
-  if (!allowedTypes.includes(file.type)) {
+  if (!allowedFileTypes.has(file.type)) {
     Toast.error(`Format file ${file.name} tidak didukung. Gunakan PDF, JPG, atau PNG.`);
     return false;
   }
@@ -54,196 +39,107 @@ const validateFileType = (file) => {
 };
 
 const mapProdiData = (data) => {
-  const mappedProdi = data.map((item, index) => ({
-    Value: item.id || item.konId || `prodi-${index}`,
-    Text: item.nama || `Program Studi ${index + 1}`
+  const mapped = data.map((item, i) => ({
+    Value: item.id || item.konId || `prodi-${i}`,
+    Text: item.nama || `Program Studi ${i + 1}`,
   }));
-  
-  return mappedProdi.filter((prodi, index, self) => 
-    index === self.findIndex(p => p.Value === prodi.Value)
-  );
+  return mapped.filter((p, i, self) => i === self.findIndex(x => x.Value === p.Value));
 };
 
 const mapStudentData = (data) => {
-  const mappedStudents = data.map((item, index) => ({
-    Value: item.mhsId || `student-${index}`,
-    Text: item.mhsNama || `Mahasiswa ${index + 1}`
+  const mapped = data.map((item, i) => ({
+    Value: item.mhsId || `student-${i}`,
+    Text: item.mhsNama || `Mahasiswa ${i + 1}`,
   }));
-  
-  return mappedStudents.filter((student, index, self) => 
-    index === self.findIndex(s => s.Value === student.Value)
-  );
+  return mapped.filter((s, i, self) => i === self.findIndex(x => x.Value === s.Value));
 };
 
 const generateTahunAkademikOptions = (angkatan) => {
   if (!angkatan) {
-    const currentYear = new Date().getFullYear();
+    const y = new Date().getFullYear();
     return [
-      { Value: `${currentYear-1}/${currentYear}`, Text: `${currentYear-1}/${currentYear}` },
-      { Value: `${currentYear}/${currentYear+1}`, Text: `${currentYear}/${currentYear+1}` },
-      { Value: `${currentYear+1}/${currentYear+2}`, Text: `${currentYear+1}/${currentYear+2}` },
+      { Value: `${y-1}/${y}`, Text: `${y-1}/${y}` },
+      { Value: `${y}/${y+1}`, Text: `${y}/${y+1}` },
+      { Value: `${y+1}/${y+2}`, Text: `${y+1}/${y+2}` },
     ];
   }
-
-  const tahunSekarang = new Date().getFullYear() - 1;
+  const base = new Date().getFullYear() - 1;
   const angkatanInt = Number.parseInt(angkatan, 10);
-  const tahunAkademikList = [];
-
-  for (let i = tahunSekarang; i <= angkatanInt + 3; i++) {
-    const tahunAkademik = `${i}/${i + 1}`;
-    tahunAkademikList.push({
-      Value: tahunAkademik,
-      Text: tahunAkademik
-    });
+  const list = [];
+  for (let i = base; i <= angkatanInt + 3; i++) {
+    list.push({ Value: `${i}/${i+1}`, Text: `${i}/${i+1}` });
   }
-
-  return tahunAkademikList.filter((item, index, self) => 
-    index === self.findIndex(t => t.Value === item.Value)
-  );
+  return list.filter((item, i, self) => i === self.findIndex(t => t.Value === item.Value));
 };
+
+const semesterData = [
+  { Value: "Ganjil", Text: "Ganjil" },
+  { Value: "Genap", Text: "Genap" },
+];
 
 export default function AddCutiAkademik() {
   const router = useRouter();
   const userData = useMemo(() => getUserData(), []);
-  const [isClient, setIsClient] = useState(false);
 
   const roleId = userData?.roleId || "";
-  
   const isProdi = roleId === "ROL71";
   const isMahasiswa = roleId === "ROL23";
-
-  // Fix hydration mismatch
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
 
   const [saving, setSaving] = useState(false);
   const [prodiList, setProdiList] = useState([]);
   const [studentList, setStudentList] = useState([]);
   const [loadingProdi, setLoadingProdi] = useState(false);
   const [loadingStudents, setLoadingStudents] = useState(false);
+  const [bebasTanggunganStatus, setBebasTanggunganStatus] = useState(null);
+  const [existingCutiData, setExistingCutiData] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [searchMahasiswa, setSearchMahasiswa] = useState("");
+  const [filteredStudentList, setFilteredStudentList] = useState([]);
+  const [tahunAjaranData, setTahunAjaranData] = useState([]);
+  const [formData, setFormData] = useState({
+    tahunAjaran: "", semester: "", suratPernyataan: null,
+    lampiran: null, konId: "", mhsId: "", angkatan: "", menimbang: "",
+  });
+  const [errors, setErrors] = useState({});
 
   const prodiRef = useRef();
   const mahasiswaRef = useRef();
   const tahunAjaranRef = useRef();
   const semesterRef = useRef();
 
-  const [formData, setFormData] = useState({
-    tahunAjaran: "",
-    semester: "",
-    suratPernyataan: null,
-    lampiran: null,
-    konId: "",
-    mhsId: "",
-    angkatan: "",
-    menimbang: "",
-  });
-
-  const [errors, setErrors] = useState({});
-  const [bebasTanggunganStatus, setBebasTanggunganStatus] = useState(null);
-  const [existingCutiData, setExistingCutiData] = useState([]);
-  
-  // State untuk dropdown search mahasiswa
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [searchMahasiswa, setSearchMahasiswa] = useState("");
-  const [filteredStudentList, setFilteredStudentList] = useState([]);
-
   const extractArrayFromResponse = useCallback((data) => {
-    if (Array.isArray(data)) {
-      return data;
-    }
-    
+    if (Array.isArray(data)) return data;
     if (data && typeof data === 'object') {
-      const arrayProperties = ['data', 'items', 'result'];
-      for (const prop of arrayProperties) {
-        if (data[prop] && Array.isArray(data[prop])) {
-          return data[prop];
-        }
+      for (const prop of ['data', 'items', 'result']) {
+        if (Array.isArray(data[prop])) return data[prop];
       }
-      
-      const firstArrayProp = Object.keys(data).find(key => Array.isArray(data[key]));
-      return firstArrayProp ? data[firstArrayProp] : [];
+      const key = Object.keys(data).find(k => Array.isArray(data[k]));
+      return key ? data[key] : [];
     }
-    
     return [];
   }, []);
 
-  const filterValidCutiData = useCallback((data) => {
-    return data.filter(item => {
-      const status = item.status || item.cak_status || "";
-      return status !== "Ditolak";
-    });
-  }, []);
-
-  const fetchCutiData = useCallback(async (mhsId) => {
-    const params = new URLSearchParams({
-      mhsId: mhsId,
-      pageNumber: '1',
-      pageSize: '100'
-    });
-
-    const response = await fetch(`${API_LINK}CutiAkademik/GetAllCutiAkademik?${params}`, {
-      method: 'GET',
-      headers: getAuthHeaders()
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to fetch existing cuti data");
-    }
-
-    return response.json();
-  }, []);
-
-  const checkExistingCutiData = useCallback(async (mhsId) => {
-    if (!mhsId) {
-      setExistingCutiData([]);
-      return;
-    }
-
-    try {
-      const data = await fetchCutiData(mhsId);
-      const actualData = extractArrayFromResponse(data);
-      const validCutiData = filterValidCutiData(actualData);
-      setExistingCutiData(validCutiData);
-    } catch (error) {
-      if (error) setExistingCutiData([]);
-    }
-  }, [fetchCutiData, extractArrayFromResponse, filterValidCutiData]);
-
-  const isTahunAkademikUsed = useCallback((tahunAkademik) => {
+  const isTahunAkademikUsed = useCallback((tahun) => {
     return existingCutiData.some(item => {
-      const existingTahun = item.tahunAjaran || item.cak_tahun_ajaran || "";
-      return existingTahun === tahunAkademik;
+      const t = item.tahunAjaran || item.cak_tahun_ajaran || "";
+      return t === tahun;
     });
   }, [existingCutiData]);
 
-  const getAvailableTahunAkademik = useCallback((allOptions) => {
-    return allOptions.filter(option => !isTahunAkademikUsed(option.Value));
-  }, [isTahunAkademikUsed]);           
+  const getAvailableTahunAkademik = useCallback((all) => {
+    return all.filter(opt => !isTahunAkademikUsed(opt.Value));
+  }, [isTahunAkademikUsed]);
 
   const loadStudentsForKonId = useCallback(async (konId) => {
-    if (!konId) {
-      setStudentList([]);
-      return;
-    }
-
+    if (!konId) { setStudentList([]); return; }
     setLoadingStudents(true);
     try {
-      // Menggunakan username dari userData untuk mendapatkan mahasiswa berdasarkan konsentrasi
       const username = userData?.username || userData?.nama;
-      const response = await fetch(`${API_LINK}CutiAkademik/GetMahasiswaByKonsentrasi?username=${username}`, {
-        method: 'GET',
-        headers: getAuthHeaders()
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const uniqueStudents = mapStudentData(data);
-        setStudentList(uniqueStudents);
-      } else {
-        Toast.error("Gagal memuat daftar mahasiswa.");
-        setStudentList([]);
-      }
+      const data = await fetchData(
+        `${API_LINK}CutiAkademik/GetMahasiswaByKonsentrasi?username=${username}`,
+        {}, "GET"
+      );
+      setStudentList(mapStudentData(Array.isArray(data) ? data : []));
     } catch {
       Toast.error("Terjadi kesalahan saat memuat daftar mahasiswa.");
       setStudentList([]);
@@ -254,35 +150,20 @@ export default function AddCutiAkademik() {
 
   useEffect(() => {
     const username = userData?.username || userData?.nama;
-    
-    if (!isProdi || !username) {
-      return;
-    }
-    
+    if (!isProdi || !username) return;
+
     const loadProdi = async () => {
       setLoadingProdi(true);
       try {
-        const response = await fetch(`${API_LINK}CutiAkademik/GetKonsentrasiBySekprod?username=${username}`, {
-          method: 'GET',
-          headers: getAuthHeaders()
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          const uniqueProdi = mapProdiData(data);
-          
-          setProdiList(uniqueProdi);
-          
-          if (uniqueProdi.length === 1) {
-            setFormData(prev => ({
-              ...prev,
-              konId: uniqueProdi[0].Value
-            }));
-            
-            loadStudentsForKonId(uniqueProdi[0].Value);
-          }
-        } else {
-          Toast.error("Gagal memuat daftar program studi.");
+        const data = await fetchData(
+          `${API_LINK}CutiAkademik/GetKonsentrasiBySekprod?username=${username}`,
+          {}, "GET"
+        );
+        const uniqueProdi = mapProdiData(Array.isArray(data) ? data : []);
+        setProdiList(uniqueProdi);
+        if (uniqueProdi.length === 1) {
+          setFormData(prev => ({ ...prev, konId: uniqueProdi[0].Value }));
+          loadStudentsForKonId(uniqueProdi[0].Value);
         }
       } catch {
         Toast.error("Terjadi kesalahan saat memuat daftar program studi.");
@@ -290,183 +171,137 @@ export default function AddCutiAkademik() {
         setLoadingProdi(false);
       }
     };
-
     loadProdi();
   }, [isProdi, userData?.username, userData?.nama, loadStudentsForKonId]);
 
   useEffect(() => {
     if (!isMahasiswa || !userData) return;
-    
     const loadMahasiswaData = async () => {
+      const mhsId = userData?.mhsId || userData?.userid || userData?.username || userData?.nama || "";
+      if (!mhsId) return;
       try {
-        const mhsId = userData?.mhsId || userData?.userid || userData?.username || userData?.nama || "";
-        
-        if (!mhsId) {
-          return;
-        }
-
-        const response = await fetch(`${API_LINK}CutiAkademik/GetDetailMahasiswa?mahasiswaId=${mhsId}`, {
-          method: 'GET',
-          headers: getAuthHeaders()
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          
-          setFormData(prev => ({
-            ...prev,
-            mhsId: mhsId,
-            angkatan: data.mhsAngkatan?.toString() || ""
-          }));
-          
-        } else {
-          Toast.error("Gagal memuat data mahasiswa. Pastikan Anda login dengan akun yang benar.");
-        }
+        const data = await fetchData(
+          `${API_LINK}CutiAkademik/GetDetailMahasiswa?mahasiswaId=${mhsId}`,
+          {}, "GET"
+        );
+        setFormData(prev => ({
+          ...prev, mhsId, angkatan: data?.mhsAngkatan?.toString() || "",
+        }));
       } catch {
         Toast.error("Terjadi kesalahan saat memuat data mahasiswa.");
       }
     };
-
     loadMahasiswaData();
   }, [isMahasiswa, userData]);
 
   useEffect(() => {
     let targetMhsId = "";
-    
     if (isMahasiswa) {
       targetMhsId = userData?.mhsId || userData?.userid || userData?.username || userData?.nama || "";
     } else if (isProdi && formData.mhsId) {
       targetMhsId = formData.mhsId;
     }
-    
-    if (targetMhsId) {
-      checkExistingCutiData(targetMhsId);
-    }
-  }, [isMahasiswa, isProdi, formData.mhsId, userData, checkExistingCutiData]);
+    if (!targetMhsId) { setExistingCutiData([]); return; }
 
-  const handleProdiChange = async (e) => {
-    const konId = e.target.value;
-    setFormData(prev => ({
-      ...prev,
-      konId: konId,
-      mhsId: "",
-      angkatan: ""
-    }));
-
-    setSearchMahasiswa("");
-    setShowDropdown(false);
-
-    await loadStudentsForKonId(konId);
-  };
-
-  const handleStudentSelect = async (mhsId) => {
-    setFormData(prev => ({
-      ...prev,
-      mhsId: mhsId,
-      angkatan: ""
-    }));
-
-    setShowDropdown(false);
-    setSearchMahasiswa("");
-    setBebasTanggunganStatus(null);
-
-    if (!mhsId) return;
-
-    try {
-      if (isProdi) {
-        const btResponse = await fetch(`${API_LINK}CutiAkademik/CheckBebasTanggungan?userId=${mhsId}`, {
-          method: 'GET',
-          headers: getAuthHeaders()
-        });
-        
-        if (btResponse.ok) {
-          const btData = await btResponse.json();
-          setBebasTanggunganStatus(btData.status);
-        }
-      }
-
-      const response = await fetch(`${API_LINK}CutiAkademik/GetDetailMahasiswa?mahasiswaId=${mhsId}`, {
-        method: 'GET',
-        headers: getAuthHeaders()
-      });
-      
-      if (response.ok) {
-        const detailData = await response.json();
-        setFormData(prev => ({
-          ...prev,
-          angkatan: (detailData.mhsAngkatan || "").toString()
+    const check = async () => {
+      try {
+        const data = await fetchData(
+          `${API_LINK}CutiAkademik/GetAllCutiAkademik?mhsId=${targetMhsId}&pageNumber=1&pageSize=100`,
+          {}, "GET"
+        );
+        const actual = extractArrayFromResponse(data);
+        setExistingCutiData(actual.filter(item => {
+          const s = item.status || item.cak_status || "";
+          return s !== "Ditolak";
         }));
-      } else {
-        Toast.error("Gagal memuat detail mahasiswa.");
+      } catch {
+        setExistingCutiData([]);
       }
-    } catch {
-      Toast.error("Terjadi kesalahan saat memuat detail mahasiswa.");
-    }
-  };
+    };
+    check();
+  }, [isMahasiswa, isProdi, formData.mhsId, userData, extractArrayFromResponse]);
 
-  // Update filtered list ketika studentList berubah
   useEffect(() => {
     setFilteredStudentList(studentList);
   }, [studentList]);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (mahasiswaRef.current && !mahasiswaRef.current.contains(event.target)) {
+    const handleClickOutside = (e) => {
+      if (mahasiswaRef.current && !mahasiswaRef.current.contains(e.target)) {
         setShowDropdown(false);
       }
     };
-
     if (showDropdown) {
       document.addEventListener('mousedown', handleClickOutside);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
+      return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showDropdown]);
 
-  const handleChange = (e) => {
+  useEffect(() => {
+    if ((isProdi || isMahasiswa) && formData.angkatan) {
+      const all = generateTahunAkademikOptions(formData.angkatan);
+      const available = getAvailableTahunAkademik(all);
+      setTahunAjaranData(available);
+      if (formData.tahunAjaran && !available.some(i => i.Value === formData.tahunAjaran)) {
+        setFormData(prev => ({ ...prev, tahunAjaran: "" }));
+      }
+    } else {
+      setTahunAjaranData(generateTahunAkademikOptions(null));
+    }
+  }, [formData.angkatan, isProdi, isMahasiswa, getAvailableTahunAkademik, formData.tahunAjaran]);
+
+  const handleProdiChange = useCallback(async (e) => {
+    const konId = e.target.value;
+    setFormData(prev => ({ ...prev, konId, mhsId: "", angkatan: "" }));
+    setSearchMahasiswa("");
+    setShowDropdown(false);
+    await loadStudentsForKonId(konId);
+  }, [loadStudentsForKonId]);
+
+  const handleStudentSelect = useCallback(async (mhsId) => {
+    setFormData(prev => ({ ...prev, mhsId, angkatan: "" }));
+    setShowDropdown(false);
+    setSearchMahasiswa("");
+    setBebasTanggunganStatus(null);
+    if (!mhsId) return;
+    try {
+      if (isProdi) {
+        const btData = await fetchData(
+          `${API_LINK}CutiAkademik/CheckBebasTanggungan?userId=${mhsId}`,
+          {}, "GET"
+        );
+        setBebasTanggunganStatus(btData?.status || null);
+      }
+      const detail = await fetchData(
+        `${API_LINK}CutiAkademik/GetDetailMahasiswa?mahasiswaId=${mhsId}`,
+        {}, "GET"
+      );
+      setFormData(prev => ({ ...prev, angkatan: (detail?.mhsAngkatan || "").toString() }));
+    } catch {
+      Toast.error("Terjadi kesalahan saat memuat detail mahasiswa.");
+    }
+  }, [isProdi]);
+
+  const handleChange = useCallback((e) => {
     const { name, value, files } = e.target;
-    
     if (files?.[0]) {
       const file = files[0];
-      
-      if (!validateFileSize(file) || !validateFileType(file)) {
-        e.target.value = '';
-        return;
-      }
-      
-      setFormData((prev) => ({
-        ...prev,
-        [name]: file,
-      }));
+      if (!validateFile(file)) { e.target.value = ''; return; }
+      setFormData(prev => ({ ...prev, [name]: file }));
     } else {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
+      setFormData(prev => ({ ...prev, [name]: value }));
     }
-    
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: null }));
-    }
-  };
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
+  }, [errors]);
 
   const handleEditorChange = useCallback((e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: null }));
-    }
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
   }, [errors]);
 
-  const validate = () => {
+  const validate = useCallback(() => {
     const newErrors = {};
-    
     if (isProdi) {
       if (!formData.konId) newErrors.konId = "Program studi harus dipilih.";
       if (!formData.mhsId) newErrors.mhsId = "Mahasiswa harus dipilih.";
@@ -474,120 +309,85 @@ export default function AddCutiAkademik() {
         newErrors.menimbang = "Menimbang/pertimbangan wajib diisi.";
       }
     }
-    
     if (!formData.tahunAjaran) {
       newErrors.tahunAjaran = "Tahun akademik wajib diisi.";
     } else if (isTahunAkademikUsed(formData.tahunAjaran)) {
-      newErrors.tahunAjaran = `Mahasiswa sudah pernah mengajukan cuti akademik di tahun akademik ${formData.tahunAjaran}. Silakan pilih tahun akademik yang lain.`;
+      newErrors.tahunAjaran = `Mahasiswa sudah pernah mengajukan cuti di tahun ${formData.tahunAjaran}.`;
     }
-    
     if (!formData.semester) newErrors.semester = "Semester wajib diisi.";
     if (!formData.suratPernyataan) newErrors.suratPernyataan = "Surat pernyataan wajib di-upload.";
-    
     setErrors(newErrors);
-    
     if (Object.keys(newErrors).length > 0) {
       Toast.error("Mohon lengkapi semua field yang wajib diisi.");
       return false;
     }
-    
     return true;
-  };
+  }, [formData, isProdi, isTahunAkademikUsed]);
 
-  const buildProdiFormData = useCallback((fd) => {
-    const approvalProdi = userData?.nama || userData?.username || userData?.userid || "";
-    
-    fd.append("MhsId", formData.mhsId);
-    fd.append("TahunAjaran", formData.tahunAjaran);
-    fd.append("Semester", formData.semester);
-    fd.append("Menimbang", formData.menimbang);
-    fd.append("ApprovalProdi", approvalProdi);
-    fd.append("CreatedBy", approvalProdi);
-  }, [formData, userData]);
-
-  const buildMahasiswaFormData = useCallback((fd) => {
-    const mhsId = userData?.mhsId || userData?.userid || userData?.username || userData?.nama || "";
-    
-    if (!mhsId) {
-      Toast.error("User tidak valid.");
-      return false;
+  const buildFormData = useCallback(() => {
+    const fd = new FormData();
+    if (isProdi) {
+      const approvalProdi = userData?.nama || userData?.username || userData?.userid || "";
+      fd.append("MhsId", formData.mhsId);
+      fd.append("TahunAjaran", formData.tahunAjaran);
+      fd.append("Semester", formData.semester);
+      fd.append("Menimbang", formData.menimbang);
+      fd.append("ApprovalProdi", approvalProdi);
+      fd.append("CreatedBy", approvalProdi);
+    } else {
+      const mhsId = userData?.mhsId || userData?.userid || userData?.username || userData?.nama || "";
+      if (!mhsId) { Toast.error("User tidak valid."); return null; }
+      fd.append("MhsId", mhsId);
+      fd.append("TahunAjaran", formData.tahunAjaran);
+      fd.append("Semester", formData.semester);
+      fd.append("CreatedBy", mhsId);
     }
-    
-    fd.append("MhsId", mhsId);
-    fd.append("TahunAjaran", formData.tahunAjaran);
-    fd.append("Semester", formData.semester);
-    fd.append("CreatedBy", mhsId);
-    
-    return true;
-  }, [formData, userData]);
-
-  const appendFilesToFormData = useCallback((fd) => {
-    if (formData.suratPernyataan && formData.suratPernyataan instanceof File) {
+    if (formData.suratPernyataan instanceof File) {
       fd.append("LampiranSuratPengajuan", formData.suratPernyataan, formData.suratPernyataan.name);
     }
-    
-    if (formData.lampiran && formData.lampiran instanceof File) {
+    if (formData.lampiran instanceof File) {
       fd.append("Lampiran", formData.lampiran, formData.lampiran.name);
     }
-  }, [formData]);
+    return fd;
+  }, [isProdi, formData, userData]);
 
-  const handleSubmissionSuccess = useCallback((result) => {
-    if (isProdi) {
-      const prodiCreatedApps = JSON.parse(sessionStorage.getItem('prodiCreatedApps') || '[]');
-      if (!prodiCreatedApps.includes(result.draftId)) {
-        prodiCreatedApps.push(result.draftId);
-        sessionStorage.setItem('prodiCreatedApps', JSON.stringify(prodiCreatedApps));
-      }
-      Toast.success("Pengajuan Cuti berhasil dibuat untuk mahasiswa.");
-    } else {
-      Toast.success("Pengajuan Cuti berhasil dibuat.");
-    }
-    router.push("/pages/administrasi-akademik/cuti-akademik");
-  }, [isProdi, router]);
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
-    if (saving) return;
-    if (!validate()) return;
-
+    if (saving || !validate()) return;
     setSaving(true);
-
     try {
-      const fd = new FormData();
-      
-      if (isProdi) {
-        buildProdiFormData(fd);
-      } else {
-        const success = buildMahasiswaFormData(fd);
-        if (!success) return;
-      }
+      const fd = buildFormData();
+      if (!fd) return;
 
-      appendFilesToFormData(fd);
-
-      const endpoint = isProdi 
+      const endpoint = isProdi
         ? `${API_LINK}CutiAkademik/CreateDraftCutiAkademikByProdi`
         : `${API_LINK}CutiAkademik/CreateDraftCutiAkademik`;
 
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          'Authorization': `Bearer ${Cookies.get("jwtToken")}`
-        },
+        headers: { 'Authorization': `Bearer ${Cookies.get("jwtToken")}` },
         body: fd,
       });
 
       const raw = await res.text();
-
       let result;
-      try {
-        result = JSON.parse(raw);
-      } catch {
-        Toast.error("Server mengirim response tidak valid:\n\n" + raw);
+      try { result = JSON.parse(raw); } catch {
+        Toast.error("Server mengirim response tidak valid.");
         return;
       }
 
       if (result?.draftId) {
-        handleSubmissionSuccess(result);
+        if (isProdi) {
+          const apps = JSON.parse(sessionStorage.getItem('prodiCreatedApps') || '[]');
+          if (!apps.includes(result.draftId)) {
+            apps.push(result.draftId);
+            sessionStorage.setItem('prodiCreatedApps', JSON.stringify(apps));
+          }
+          Toast.success("Pengajuan Cuti berhasil dibuat untuk mahasiswa.");
+        } else {
+          Toast.success("Pengajuan Cuti berhasil dibuat.");
+        }
+        router.push("/pages/administrasi-akademik/cuti-akademik");
       } else {
         Toast.error(result?.message || "Gagal membuat pengajuan.");
       }
@@ -596,87 +396,39 @@ export default function AddCutiAkademik() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [saving, validate, buildFormData, isProdi, router]);
 
-  const handleCancel = () => router.back();
-
-  const [tahunAjaranData, setTahunAjaranData] = useState([]);
-
-  useEffect(() => {
-    if ((isProdi || isMahasiswa) && formData.angkatan) {
-      const allTahunAkademikData = generateTahunAkademikOptions(formData.angkatan);
-      const availableTahunAkademikData = getAvailableTahunAkademik(allTahunAkademikData);
-      setTahunAjaranData(availableTahunAkademikData);
-      
-      if (formData.tahunAjaran && !availableTahunAkademikData.some(item => item.Value === formData.tahunAjaran)) {
-        setFormData(prev => ({
-          ...prev,
-          tahunAjaran: ""
-        }));
-      }
-    } else if (!isProdi && !isMahasiswa) {
-      const defaultTahunAkademik = generateTahunAkademikOptions(null);
-      setTahunAjaranData(defaultTahunAkademik);
-    }
-  }, [formData.angkatan, isProdi, isMahasiswa, getAvailableTahunAkademik, formData.tahunAjaran]);
-
-  useEffect(() => {
-    if (!isProdi && !isMahasiswa) {
-      const defaultTahunAkademik = generateTahunAkademikOptions(null);
-      setTahunAjaranData(defaultTahunAkademik);
-    }
-  }, [isProdi, isMahasiswa]);
-
-  const semesterData = [
-    { Value: "Ganjil", Text: "Ganjil" },
-    { Value: "Genap", Text: "Genap" },
-  ];
-
-  const getPageTitle = () => {
-    if (!isClient) return "Tambah Pengajuan Cuti Akademik";
-    if (isProdi) return "Tambah Pengajuan Cuti Akademik (Prodi)";
-    if (isMahasiswa) return "Tambah Pengajuan Cuti Akademik (Mahasiswa)";
-    return "Tambah Pengajuan Cuti Akademik";
-  };
-
-  const getBreadcrumbLabel = () => {
-    if (!isClient) return "Tambah Pengajuan";
-    if (isProdi) return "Tambah Pengajuan (Prodi)";
-    if (isMahasiswa) return "Tambah Pengajuan (Mahasiswa)";
-    return "Tambah Pengajuan";
-  };
+  const handleCancel = useCallback(() => router.back(), [router]);
 
   return (
     <MainContent
-      title={getPageTitle()}
+      title={isProdi ? "Tambah Pengajuan Cuti Akademik (Prodi)" : "Tambah Pengajuan Cuti Akademik"}
       layout="Admin"
       breadcrumb={[
         { label: "Sistem Informasi Akademik" },
         { label: "Administrasi Akademik" },
         { label: "Cuti Akademik" },
-        { label: getBreadcrumbLabel() },
+        { label: isProdi ? "Tambah Pengajuan (Prodi)" : "Tambah Pengajuan" },
       ]}
     >
-      {isClient && isProdi && formData.mhsId && bebasTanggunganStatus === "NOK" && (
+      {isProdi && formData.mhsId && bebasTanggunganStatus === "NOK" && (
         <div className="mb-3">
           <div className="alert alert-warning mb-2" role="alert">
             <i className="fas fa-exclamation-triangle me-2"></i>
             <strong>Mahasiswa belum menyelesaikan administrasi bebas tanggungan</strong>
           </div>
-          <button 
+          <button
             type="button"
-            className="btn btn-link p-0 text-primary text-decoration-underline" 
-            style={{ cursor: 'pointer' }}
+            className="btn btn-link p-0 text-primary text-decoration-underline"
             onClick={() => router.push('/pages/administrasi-akademik/bebas-tanggungan')}
           >
-            <i className="fas fa-eye me-1"></i>
-            {" "}Lihat Administrasi Bebas Tanggungan
+            <i className="fas fa-eye me-1"></i>{" "}Lihat Administrasi Bebas Tanggungan
           </button>
         </div>
       )}
 
       <form onSubmit={handleSubmit}>
-        {isClient && isProdi && (
+        {isProdi && (
           <div className="row mt-3">
             <div className="col-lg-4">
               <DropDown
@@ -693,182 +445,60 @@ export default function AddCutiAkademik() {
                 searchable={true}
               />
             </div>
-
             <div className="col-lg-4">
-              <Label
-                required={true}
-                text="Mahasiswa"
-                htmlFor="mhsId"
-                tooltip="Mahasiswa"
-              />
+              <Label required={true} text="Mahasiswa" htmlFor="mhsId" />
               <div style={{ position: 'relative' }} ref={mahasiswaRef}>
-                {/* Dropdown Button */}
                 <button
                   type="button"
                   className="form-select rounded-4 text-start"
                   onClick={() => {
-                    if (!formData.konId || loadingStudents) return;
-                    setShowDropdown(!showDropdown);
+                    if (formData.konId && !loadingStudents) setShowDropdown(!showDropdown);
                   }}
                   disabled={!formData.konId || loadingStudents}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    backgroundColor: '#e8eaf6',
-                    borderColor: '#d1d5e8',
-                    color: '#5f6368',
-                  }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#e8eaf6', borderColor: '#d1d5e8', color: '#5f6368' }}
                 >
                   <span style={{ color: formData.mhsId ? '#5f6368' : '#9e9e9e' }}>
-                    {formData.mhsId 
-                      ? studentList.find(s => s.Value === formData.mhsId)?.Text || '-- Pilih Mahasiswa --'
-                      : '-- Pilih Mahasiswa --'
-                    }
+                    {formData.mhsId ? studentList.find(s => s.Value === formData.mhsId)?.Text || '-- Pilih Mahasiswa --' : '-- Pilih Mahasiswa --'}
                   </span>
                 </button>
-
-                {/* Dropdown Menu */}
                 {showDropdown && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      right: 0,
-                      zIndex: 1000,
-                      backgroundColor: 'white',
-                      border: '1px solid #ced4da',
-                      borderRadius: '0.375rem',
-                      marginTop: '2px',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                      maxHeight: '300px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                    }}
-                  >
-                    {/* Search Input */}
-                    <div
-                      style={{
-                        padding: '0.5rem',
-                        borderBottom: '1px solid #dee2e6',
-                        backgroundColor: 'white',
-                      }}
-                    >
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000, backgroundColor: 'white', border: '1px solid #ced4da', borderRadius: '0.375rem', marginTop: '2px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', maxHeight: '300px', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ padding: '0.5rem', borderBottom: '1px solid #dee2e6' }}>
                       <input
                         type="text"
                         className="form-control"
                         placeholder="Cari mahasiswa..."
                         value={searchMahasiswa}
                         onChange={(e) => {
-                          const value = e.target.value;
-                          setSearchMahasiswa(value);
-                          if (value.trim() === "") {
-                            setFilteredStudentList(studentList);
-                          } else {
-                            setFilteredStudentList(
-                              studentList.filter(student => 
-                                student.Text.toLowerCase().includes(value.toLowerCase())
-                              )
-                            );
-                          }
+                          const v = e.target.value;
+                          setSearchMahasiswa(v);
+                          setFilteredStudentList(v.trim() === "" ? studentList : studentList.filter(s => s.Text.toLowerCase().includes(v.toLowerCase())));
                         }}
                         autoFocus
                         style={{ fontSize: '0.9rem', backgroundColor: '#f0f4ff' }}
                       />
                     </div>
-
-                    {/* List Items */}
-                    <div style={{ 
-                      overflowY: 'auto', 
-                      maxHeight: '250px',
-                      scrollbarWidth: 'none', /* Firefox */
-                      msOverflowStyle: 'none', /* IE and Edge */
-                    }}
-                    className="hide-scrollbar"
-                    >
-                      <style jsx>{`
-                        .hide-scrollbar::-webkit-scrollbar {
-                          display: none;
-                        }
-                      `}</style>
-                      <div
-                        style={{
-                          padding: '0.5rem 0.75rem',
-                          color: '#6c757d',
-                          backgroundColor: '#e9ecef',
-                          borderBottom: '1px solid #dee2e6',
-                          fontSize: '0.95rem',
-                        }}
-                      >
-                        -- Pilih Mahasiswa --
-                      </div>
-                      {filteredStudentList && filteredStudentList.length > 0 ? (
-                        filteredStudentList.map((student) => (
-                          <button
-                            key={student.Value}
-                            type="button"
-                            onClick={() => handleStudentSelect(student.Value)}
-                            style={{
-                              width: '100%',
-                              padding: '0.5rem 0.75rem',
-                              cursor: 'pointer',
-                              backgroundColor: formData.mhsId === student.Value ? '#e3f2fd' : 'white',
-                              border: 'none',
-                              borderBottom: '1px solid #f0f0f0',
-                              fontSize: '0.95rem',
-                              textAlign: 'left',
-                              color: '#212529',
-                            }}
-                            onMouseEnter={(e) => {
-                              if (formData.mhsId !== student.Value) {
-                                e.currentTarget.style.backgroundColor = '#f8f9fa';
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (formData.mhsId !== student.Value) {
-                                e.currentTarget.style.backgroundColor = 'white';
-                              }
-                            }}
-                          >
-                            {student.Text}
-                          </button>
-                        ))
-                      ) : (
-                        <div
-                          style={{
-                            padding: '0.5rem 0.75rem',
-                            color: '#6c757d',
-                            fontSize: '0.95rem',
-                          }}
-                        >
-                          {studentList && studentList.length > 0 
-                            ? 'Tidak ada data ditemukan' 
-                            : 'Memuat data mahasiswa...'}
+                    <div style={{ overflowY: 'auto', maxHeight: '250px' }}>
+                      <div style={{ padding: '0.5rem 0.75rem', color: '#6c757d', backgroundColor: '#e9ecef', borderBottom: '1px solid #dee2e6', fontSize: '0.95rem' }}>-- Pilih Mahasiswa --</div>
+                      {filteredStudentList.length > 0 ? filteredStudentList.map(s => (
+                        <button key={s.Value} type="button" onClick={() => handleStudentSelect(s.Value)}
+                          style={{ width: '100%', padding: '0.5rem 0.75rem', cursor: 'pointer', backgroundColor: formData.mhsId === s.Value ? '#e3f2fd' : 'white', border: 'none', borderBottom: '1px solid #f0f0f0', fontSize: '0.95rem', textAlign: 'left', color: '#212529' }}>
+                          {s.Text}
+                        </button>
+                      )) : (
+                        <div style={{ padding: '0.5rem 0.75rem', color: '#6c757d', fontSize: '0.95rem' }}>
+                          {studentList.length > 0 ? 'Tidak ada data ditemukan' : 'Memuat data mahasiswa...'}
                         </div>
                       )}
                     </div>
                   </div>
                 )}
               </div>
-              {errors.mhsId && (
-                <span className="fw-normal text-danger">{errors.mhsId}</span>
-              )}
+              {errors.mhsId && <span className="fw-normal text-danger">{errors.mhsId}</span>}
             </div>
             <div className="col-lg-4">
-              <Label
-                text="Angkatan"
-                htmlFor="angkatan"
-                required={false}
-              />
-              <input
-                type="text"
-                className="form-control rounded-4 blue-element"
-                value={formData.angkatan}
-                disabled
-                placeholder=""
-              />
+              <Label text="Angkatan" htmlFor="angkatan" required={false} />
+              <input type="text" className="form-control rounded-4 blue-element" value={formData.angkatan} disabled />
             </div>
           </div>
         )}
@@ -887,7 +517,6 @@ export default function AddCutiAkademik() {
               errorMessage={errors.tahunAjaran}
             />
           </div>
-
           <div className="col-lg-6">
             <DropDown
               ref={semesterRef}
@@ -905,91 +534,34 @@ export default function AddCutiAkademik() {
 
         <div className="row mt-3">
           <div className="col-lg-6">
-            <Label
-              text={isClient && isProdi ? "Berkas Surat Pernyataan" : "Surat Pernyataan"}
-              htmlFor="suratPernyataan"
-              required={true}
-            />
-            <input
-              type="file"
-              name="suratPernyataan"
-              className="form-control rounded-4 blue-element"
-              onChange={handleChange}
-              accept=".pdf,.jpg,.jpeg,.png"
-            />
-            {errors.suratPernyataan && (
-              <span className="fw-normal text-danger">{errors.suratPernyataan}</span>
-            )}
+            <Label text={isProdi ? "Berkas Surat Pernyataan" : "Surat Pernyataan"} htmlFor="suratPernyataan" required={true} />
+            <input type="file" name="suratPernyataan" className="form-control rounded-4 blue-element" onChange={handleChange} accept=".pdf,.jpg,.jpeg,.png" />
+            {errors.suratPernyataan && <span className="fw-normal text-danger">{errors.suratPernyataan}</span>}
             <small className="text-muted">Format yang didukung: PDF, JPG, JPEG, PNG (Maksimal 10MB)</small>
           </div>
-
           <div className="col-lg-6">
-            <Label
-              text={isClient && isProdi ? "Berkas Lampiran" : "Lampiran"}
-              htmlFor="lampiran"
-              required={false}
-            />
-            <input
-              type="file"
-              name="lampiran"
-              className="form-control rounded-4 blue-element"
-              onChange={handleChange}
-              accept=".pdf,.jpg,.jpeg,.png"
-            />
+            <Label text={isProdi ? "Berkas Lampiran" : "Lampiran"} htmlFor="lampiran" required={false} />
+            <input type="file" name="lampiran" className="form-control rounded-4 blue-element" onChange={handleChange} accept=".pdf,.jpg,.jpeg,.png" />
             <small className="text-muted">Format yang didukung: PDF, JPG, JPEG, PNG (Maksimal 10MB)</small>
           </div>
         </div>
 
-        {isClient && isProdi && (
+        {isProdi && (
           <div className="row mt-4">
             <div className="col-lg-12">
-              <Editor
-                label="Menimbang"
-                name="menimbang"
-                value={formData.menimbang}
-                onChange={handleEditorChange}
-                error={errors.menimbang}
-              />
-              <small className="text-muted">
-                Masukkan pertimbangan/alasan untuk pengajuan cuti akademik mahasiswa.
-              </small>
+              <Editor label="Menimbang" name="menimbang" value={formData.menimbang} onChange={handleEditorChange} error={errors.menimbang} />
+              <small className="text-muted">Masukkan pertimbangan/alasan untuk pengajuan cuti akademik mahasiswa.</small>
             </div>
           </div>
         )}
 
         <div className="d-flex justify-content-end mt-4 gap-2">
-          <Button
-            classType="secondary"
-            label="Batal"
-            type="button"
-            onClick={handleCancel}
-            isDisabled={saving}
-          />
-          {!(isClient && isProdi && formData.mhsId && bebasTanggunganStatus === "NOK") && (
-            <Button
-              classType="primary"
-              iconName="save"
-              label={saving ? "Menyimpan..." : "Simpan Editor"}
-              type="submit"
-              isDisabled={saving}
-            />
+          <Button classType="secondary" label="Batal" type="button" onClick={handleCancel} isDisabled={saving} />
+          {!(isProdi && formData.mhsId && bebasTanggunganStatus === "NOK") && (
+            <Button classType="primary" iconName="save" label={saving ? "Menyimpan..." : "Simpan"} type="submit" isDisabled={saving} />
           )}
         </div>
       </form>
     </MainContent>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

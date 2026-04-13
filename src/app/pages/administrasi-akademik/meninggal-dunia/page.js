@@ -206,99 +206,6 @@ export default function Page_MeninggalDunia() {
         return actions;
     }, [roleId, determineProdiActions, determineWadir1Actions, determineFinanceActions, determineAdminActions]);
 
-    const loadPengajuan = useCallback(
-        async (page = 1) => {
-            try {
-                setLoadingPengajuan(true);
-
-                // Build API params
-                const params = new URLSearchParams();
-                params.append('mhsId', '%');
-                
-                if (roleId === "ROL999") {
-                    params.append('status', "Belum Disetujui Wadir 1");
-                } else if (roleId === "ROL01") {
-                    params.append('status', "Belum Disetujui Finance");
-                } else if (roleId === "ROL74") {
-                    params.append('status', "Menunggu Upload SK");
-                }
-                
-                if (roleId === "ROL71") {
-                    const userId = userData?.nama || userData?.username || "";
-                    if (userId) params.append('userId', userId);
-                }
-
-                const backendRole = userData?.roleId || "";
-                if (backendRole) params.append('role', backendRole);
-
-                const url = `${API_LINK}MeninggalDunia/GetAllMeninggalDunia?${params}`;
-                const response = await fetch(url, { method: 'GET', headers: getAuthHeaders() });
-                
-                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-
-                const responseText = await response.text();
-                let data;
-                try {
-                    data = JSON.parse(responseText);
-                } catch (parseError) {
-                    throw new Error(`Invalid JSON response from server: ${parseError.message}`);
-                }
-
-                let actualData = extractArrayFromResponse(data);
-                if (!Array.isArray(actualData)) {
-                    setDataPengajuan([]);
-                    setPengajuanTotalData(0);
-                    return;
-                }
-
-                const filteredData = filterDataByRole(actualData, prodiKonsentrasi);
-                
-                // For Prodi users, sort by ID (newest first) to show latest drafts at top
-                if (roleId === "ROL71") {
-                    filteredData.sort((a, b) => {
-                        // Use ID as primary sort (higher ID = newer)
-                        const idA = Number.parseInt(a.id || 0);
-                        const idB = Number.parseInt(b.id || 0);
-                        
-                        // If both are numbers, sort by ID descending
-                        if (!Number.isNaN(idA) && !Number.isNaN(idB)) {
-                            return idB - idA;
-                        }
-                        
-                        // If one is string (like "054/PA/MD/II/2026"), put numbers first
-                        if (!Number.isNaN(idA) && Number.isNaN(idB)) return -1;
-                        if (Number.isNaN(idA) && !Number.isNaN(idB)) return 1;
-                        
-                        // Both are strings, sort alphabetically descending
-                        return (b.id || "").localeCompare(a.id || "");
-                    });
-                }
-                
-                const totalFilteredItems = filteredData.length;
-                
-                // Apply client-side pagination
-                const startIndex = (page - 1) * pengajuanPageSize;
-                const endIndex = startIndex + pengajuanPageSize;
-                const paginatedData = filteredData.slice(startIndex, endIndex);
-
-                const formattedData = paginatedData.map((item, index) => 
-                    formatTableRow(item, index, startIndex)
-                );
-
-                setDataPengajuan(formattedData);
-                setPengajuanTotalData(totalFilteredItems);
-                setPengajuanPage(page);
-            } catch (err) {
-                Toast.error(`Gagal memuat data pengajuan: ${err.message}`);
-                setDataPengajuan([]);
-                setPengajuanTotalData(0);
-            } finally {
-                setLoadingPengajuan(false);
-            }
-        },
-        [roleId, userData, prodiKonsentrasi, filterDataByRole, pengajuanPageSize]
-    );
-
     const extractArrayFromResponse = useCallback((data) => {
         // Backend now returns array directly without wrapper
         if (Array.isArray(data)) {
@@ -362,6 +269,86 @@ export default function Page_MeninggalDunia() {
 
         return tableData;
     }, [determineItemActions, getWadir1Icon, roleId]);
+
+    const loadPengajuan = useCallback(
+        async (page = 1) => {
+            try {
+                setLoadingPengajuan(true);
+
+                const params = new URLSearchParams();
+                params.append('mhsId', '%');
+                
+                if (roleId === "ROL999") {
+                    params.append('status', "Belum Disetujui Wadir 1");
+                } else if (roleId === "ROL01") {
+                    params.append('status', "Belum Disetujui Finance");
+                } else if (roleId === "ROL74") {
+                    params.append('status', "Menunggu Upload SK");
+                }
+                
+                if (roleId === "ROL71") {
+                    const userId = userData?.nama || userData?.username || "";
+                    if (userId) params.append('userId', userId);
+                }
+
+                const backendRole = userData?.roleId || "";
+                if (backendRole) params.append('role', backendRole);
+
+                const url = `${API_LINK}MeninggalDunia/GetAllMeninggalDunia?${params}`;
+                const response = await fetch(url, { method: 'GET', headers: getAuthHeaders() });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+                const responseText = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (parseError) {
+                    throw new Error(`Invalid JSON response from server: ${parseError.message}`);
+                }
+
+                let actualData = extractArrayFromResponse(data);
+                if (!Array.isArray(actualData)) {
+                    setDataPengajuan([]);
+                    setPengajuanTotalData(0);
+                    return;
+                }
+
+                const filteredData = filterDataByRole(actualData, prodiKonsentrasi);
+                
+                if (roleId === "ROL71") {
+                    filteredData.sort((a, b) => {
+                        const idA = Number.parseInt(a.id || 0);
+                        const idB = Number.parseInt(b.id || 0);
+                        if (!Number.isNaN(idA) && !Number.isNaN(idB)) return idB - idA;
+                        if (!Number.isNaN(idA) && Number.isNaN(idB)) return -1;
+                        if (Number.isNaN(idA) && !Number.isNaN(idB)) return 1;
+                        return (b.id || "").localeCompare(a.id || "");
+                    });
+                }
+                
+                const totalFilteredItems = filteredData.length;
+                const startIndex = (page - 1) * pengajuanPageSize;
+                const endIndex = startIndex + pengajuanPageSize;
+                const paginatedData = filteredData.slice(startIndex, endIndex);
+
+                const formattedData = paginatedData.map((item, index) => 
+                    formatTableRow(item, index, startIndex)
+                );
+
+                setDataPengajuan(formattedData);
+                setPengajuanTotalData(totalFilteredItems);
+                setPengajuanPage(page);
+            } catch (err) {
+                Toast.error(`Gagal memuat data pengajuan: ${err.message}`);
+                setDataPengajuan([]);
+                setPengajuanTotalData(0);
+            } finally {
+                setLoadingPengajuan(false);
+            }
+        },
+        [roleId, userData, prodiKonsentrasi, filterDataByRole, pengajuanPageSize, extractArrayFromResponse, formatTableRow]
+    );
 
     const [dataRiwayat, setDataRiwayat] = useState([]);
     const [loadingRiwayat, setLoadingRiwayat] = useState(true);

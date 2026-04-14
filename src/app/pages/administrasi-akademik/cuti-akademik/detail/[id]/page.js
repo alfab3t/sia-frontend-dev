@@ -171,7 +171,7 @@ export default function DetailCutiAkademikPage() {
             <div className="row">
               <div className="col-lg-12 mb-3">
                 <h6 className="fw-semibold mb-1">Surat Keputusan</h6>
-                <Button classType="success" label="📄 Download SK Cuti Akademik" onClick={() => handleDownload(detail.sk)} />
+                <Button classType="success" label="Download SK Cuti Akademik" onClick={() => handleDownload(detail.sk)} />
                 {detail?.srtNo && <p className="mt-2 mb-0 text-muted"><small>Nomor: {detail.srtNo}</small></p>}
               </div>
             </div>

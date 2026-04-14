@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Paging from "@/components/common/Paging";
 import Table from "@/components/common/Table";
 import Toast from "@/components/common/Toast";
@@ -9,71 +10,68 @@ import DropDown from "@/components/common/Dropdown";
 import Label from "@/components/common/Label";
 import MainContent from "@/components/layout/MainContent";
 import Formsearch from "@/components/common/Formsearch";
-import { useRouter } from "next/navigation";
+import Loading from "@/components/common/Loading";
 import { API_LINK } from "@/lib/constant";
 import { encryptIdUrl } from "@/lib/encryptor";
 import SweetAlert from "@/components/common/SweetAlert";
 import { getSSOData, getUserData } from "@/context/user";
 import Cookies from "js-cookie";
 
-// Helper function to get auth headers
+
+const BREADCRUMB_ITEMS = [
+  { label: "Sistem Informasi Akademik", href: "./auth/sso" },
+  { label: "Administrasi Akademik - Cuti Akademik" },
+];
+
+const DATA_FILTER_SORT = [
+  { Value: "tanggal_desc", Text: "Tanggal Pengajuan [↓]" },
+  { Value: "tanggal_asc", Text: "Tanggal Pengajuan [↑]" },
+  { Value: "id_asc", Text: "No Pengajuan [↑]" },
+  { Value: "id_desc", Text: "No Pengajuan [↓]" },
+];
+
+const DATA_FILTER_PRODI = [
+  { Value: "", Text: "— Semua Prodi —" },
+  { Value: "Manajemen Informatika", Text: "Manajemen Informatika" },
+  { Value: "Mekatronika", Text: "Mekatronika" },
+  { Value: "Teknik Alat Berat", Text: "Teknik Alat Berat" },
+  { Value: "Teknik Otomotif", Text: "Teknik Otomotif" },
+  { Value: "Teknik Pengolahan Hasil Perkebunan", Text: "Teknik Pengolahan Hasil Perkebunan" },
+  { Value: "Teknik Produksi dan Proses Manufaktur", Text: "Teknik Produksi dan Proses Manufaktur" },
+  { Value: "Teknologi Konstruksi Bangunan Gedung", Text: "Teknologi Konstruksi Bangunan Gedung" },
+  { Value: "Teknologi Rekayasa Logistik", Text: "Teknologi Rekayasa Logistik" },
+  { Value: "Teknologi Rekayasa Pemeliharaan Alat Berat", Text: "Teknologi Rekayasa Pemeliharaan Alat Berat" },
+  { Value: "Teknologi Rekayasa Perangkat Lunak", Text: "Teknologi Rekayasa Perangkat Lunak" },
+];
+
 const getAuthHeaders = () => {
   const token = Cookies.get("jwtToken");
   return {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` })
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    ...(token && { Authorization: `Bearer ${token}` }),
   };
 };
 
-export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
+export default function CutiAkademikPage() {
   const ssoData = useMemo(() => getSSOData(), []);
   const userData = useMemo(() => getUserData(), []);
   const permissionData = useMemo(() => {
     try {
       const data = localStorage.getItem("permissionData");
       return data ? JSON.parse(data) : [];
-    } catch { return []; }
+    } catch {
+      return [];
+    }
   }, []);
-  
+
   const router = useRouter();
   const [dataCutiAkademik, setDataCutiAkademik] = useState([]);
   const [dataRiwayat, setDataRiwayat] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [manualLoading, setManualLoading] = useState(false);
   const [showRiwayat, setShowRiwayat] = useState(false);
   const [isClient, setIsClient] = useState(false);
-
-  const sortRef = useRef();
-  const prodiRef = useRef();
-
-  // Fix hydration mismatch
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  const roleId = userData?.roleId || "";
-
-  const dataFilterSort = [
-    { Value: "tanggal_desc", Text: "Tanggal Pengajuan [↓]" },
-    { Value: "tanggal_asc", Text: "Tanggal Pengajuan [↑]" },
-    { Value: "id_asc", Text: "No Pengajuan [↑]" },
-    { Value: "id_desc", Text: "No Pengajuan [↓]" },
-  ];
-
-  const dataFilterProdi = [
-    { Value: "", Text: "— Semua Prodi —" },
-    { Value: "Manajemen Informatika", Text: "Manajemen Informatika" },
-    { Value: "Mekatronika", Text: "Mekatronika" },
-    { Value: "Teknik Alat Berat", Text: "Teknik Alat Berat" },
-    { Value: "Teknik Otomotif", Text: "Teknik Otomotif" },
-    { Value: "Teknik Pengolahan Hasil Perkebunan", Text: "Teknik Pengolahan Hasil Perkebunan" },
-    { Value: "Teknik Produksi dan Proses Manufaktur", Text: "Teknik Produksi dan Proses Manufaktur" },
-    { Value: "Teknologi Konstruksi Bangunan Gedung", Text: "Teknologi Konstruksi Bangunan Gedung" },
-    { Value: "Teknologi Rekayasa Logistik", Text: "Teknologi Rekayasa Logistik" },
-    { Value: "Teknologi Rekayasa Pemeliharaan Alat Berat", Text: "Teknologi Rekayasa Pemeliharaan Alat Berat" },
-    { Value: "Teknologi Rekayasa Perangkat Lunak", Text: "Teknologi Rekayasa Perangkat Lunak" },
-  ];
-
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPageRiwayat, setCurrentPageRiwayat] = useState(1);
   const [totalData, setTotalData] = useState(0);
@@ -81,83 +79,27 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const [pageSize] = useState(10);
   const [search] = useState("");
   const [searchRiwayat, setSearchRiwayat] = useState("");
-  const [sortBy, setSortBy] = useState(dataFilterSort[0].Value);
-  const [filterProdi, setFilterProdi] = useState(dataFilterProdi[0].Value);
-  
+  const [sortBy, setSortBy] = useState(DATA_FILTER_SORT[0].Value);
+  const [filterProdi, setFilterProdi] = useState(DATA_FILTER_PRODI[0].Value);
   const [bebasTanggunganStatus, setBebasTanggunganStatus] = useState(null);
-  
   const [prodiKonsentrasi, setProdiKonsentrasi] = useState(null);
   const [loadingProdiKonsentrasi, setLoadingProdiKonsentrasi] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [selectedCutiId, setSelectedCutiId] = useState(null);
+  const [selectedSKFile, setSelectedSKFile] = useState(null);
+  const [skFilePreview, setSKFilePreview] = useState(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const hasLoadedRef = useRef(false);
+  const sortRef = useRef();
+  const prodiRef = useRef();
 
-  useEffect(() => {
-    if (roleId !== "ROL23" || !userData) return;
-    
-    const checkBebasTanggungan = async () => {
-      try {
-        const userId = userData?.nama || userData?.mhsId || userData?.userid || userData?.username || "";
-        
-        if (!userId) {
-          return;
-        }
+  const roleId = userData?.roleId || "";
 
-        const response = await fetch(`${API_LINK}CutiAkademik/CheckBebasTanggungan?userId=${userId}`, {
-          method: 'GET',
-          headers: getAuthHeaders()
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          setBebasTanggunganStatus(data.status);
-        }
-      } catch {
-        setBebasTanggunganStatus(null);
-      }
-    };
-
-    checkBebasTanggungan();
-  }, [roleId, userData]);
-  
-  useEffect(() => {
-    if (roleId !== "ROL71" || !userData) return;
-    
-    const loadProdiKonsentrasi = async () => {
-      try {
-        setLoadingProdiKonsentrasi(true);
-        const username = userData?.nama || userData?.username || "";
-        
-        if (!username) {
-          return;
-        }
-
-        const response = await fetch(`${API_LINK}CutiAkademik/GetKonsentrasiBySekprod?username=${username}`, {
-          method: 'GET',
-          headers: getAuthHeaders()
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          
-          if (data && data.length > 0) {
-            const konsentrasiName = data[0].nama || "";
-            const cleanName = konsentrasiName.replace(/\s*\([^)]*\)\s*$/, '').trim();
-            setProdiKonsentrasi(cleanName);
-          }
-        }
-      } catch {
-        setProdiKonsentrasi(null);
-      } finally {
-        setLoadingProdiKonsentrasi(false);
-      }
-    };
-
-    loadProdiKonsentrasi();
-  }, [roleId, userData]);
-  
   const getRoleBasedParams = useCallback(() => {
     let mhsId = "%";
     let statusFilter = "";
     let userId = "";
-    
+
     if (roleId === "ROL23") {
       mhsId = userData?.mhsId || userData?.nama || userData?.username || userData?.userid || "";
       if (!mhsId) return null;
@@ -172,259 +114,282 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     return { mhsId, statusFilter, userId };
   }, [roleId, userData]);
 
+  const filterProdiData = useCallback(
+    (item, currentStatus) => {
+      const itemProdi = item.prodi || item.kon_nama || item.konsentrasi || "";
+      const normalizeProdiName = (name) => {
+        if (!name) return "";
+        return name.replace(/\s*\([^)]*\)\s*$/, "").trim();
+      };
 
-  const filterDataByRole = useCallback((actualData) => {
-    return actualData.filter(item => {
-      const currentStatus = item.status || item.cak_status || "";
-      if (roleId === "ROL23") return true;
-      if (roleId === "ROL71") return filterProdiData(item, currentStatus);
-      if (roleId === "ROL74") return filterAdminData(currentStatus);
-      return currentStatus !== "Disetujui";
-    });
-  }, [roleId, prodiKonsentrasi]);
+      const normalizedItemProdi = normalizeProdiName(itemProdi);
+      const normalizedProdiKonsentrasi = normalizeProdiName(prodiKonsentrasi);
 
-  const filterProdiData = useCallback((item, currentStatus) => {
-    const itemProdi = item.prodi || item.kon_nama || item.konsentrasi || "";
-    const normalizeProdiName = (name) => {
-      if (!name) return "";
-      return name.replace(/\s*\([^)]*\)\s*$/, '').trim();
-    };
-    
-    const normalizedItemProdi = normalizeProdiName(itemProdi);
-    const normalizedProdiKonsentrasi = normalizeProdiName(prodiKonsentrasi);
-    
-    if (prodiKonsentrasi && normalizedItemProdi !== normalizedProdiKonsentrasi) {
-      return false;
-    }
-    
-    if (currentStatus === "Draft") {
-      const approveProdiValue = item.approveProdi || item.cak_approve_prodi || "";
-      return approveProdiValue !== "" && approveProdiValue;
-    }
-    
-    return currentStatus === "Belum Disetujui Prodi" || currentStatus === "Belum Disetujui Wadir 1";
-  }, [prodiKonsentrasi]);
+      if (prodiKonsentrasi && normalizedItemProdi !== normalizedProdiKonsentrasi) {
+        return false;
+      }
+
+      if (currentStatus === "Draft") {
+        const approveProdiValue = item.approveProdi || item.cak_approve_prodi || "";
+        return approveProdiValue !== "" && approveProdiValue;
+      }
+
+      return currentStatus === "Belum Disetujui Prodi" || currentStatus === "Belum Disetujui Wadir 1";
+    },
+    [prodiKonsentrasi]
+  );
 
   const filterAdminData = useCallback((currentStatus) => {
-    // Admin can see all data except Draft (which is only for creators)
     return currentStatus !== "Draft";
   }, []);
 
-  const getMahasiswaDraftActions = useCallback(() => [
-    "Detail",
-    ...(permissionData?.includes("cuti_akademik.edit") ? ["Edit"] : []),
-    ...(permissionData?.includes("cuti_akademik.delete") ? ["Delete"] : []),
-    ...(permissionData?.includes("cuti_akademik.create") ? ["Sent"] : []),
-  ], [permissionData]);
+  const filterDataByRole = useCallback(
+    (actualData) => {
+      return actualData.filter((item) => {
+        const currentStatus = item.status || item.cak_status || "";
+        if (roleId === "ROL23") return true;
+        if (roleId === "ROL71") return filterProdiData(item, currentStatus);
+        if (roleId === "ROL74") return filterAdminData(currentStatus);
+        return currentStatus !== "Disetujui";
+      });
+    },
+    [roleId, filterProdiData, filterAdminData]
+  );
 
-  const determineMahasiswaActions = useCallback((item, currentStatus, isDraft) => {
-    const approveProdiValue = item.approveProdi || item.cak_approve_prodi || "";
+  const getMahasiswaDraftActions = useCallback(
+    () => [
+      "Detail",
+      ...(permissionData?.includes("cuti_akademik.edit") ? ["Edit"] : []),
+      ...(permissionData?.includes("cuti_akademik.delete") ? ["Delete"] : []),
+      ...(permissionData?.includes("cuti_akademik.create") ? ["Sent"] : []),
+    ],
+    [permissionData]
+  );
 
-    if (isDraft) return getMahasiswaDraftActions();
+  const determineMahasiswaActions = useCallback(
+    (item, currentStatus, isDraft) => {
+      const approveProdiValue = item.approveProdi || item.cak_approve_prodi || "";
 
-    if (currentStatus === "Disetujui") {
-      return [
-        "Detail",
-        ...(permissionData?.includes("cuti_akademik.print") ? ["DownloadSK"] : []),
-      ];
-    }
+      if (isDraft) return getMahasiswaDraftActions();
 
-    const isSubmittedByProdi = approveProdiValue !== "" && approveProdiValue;
-    if (isSubmittedByProdi) return ["Detail"];
+      if (currentStatus === "Disetujui") {
+        return [
+          "Detail",
+          ...(permissionData?.includes("cuti_akademik.print") ? ["DownloadSK"] : []),
+        ];
+      }
 
-    return ["Detail"];
-  }, [permissionData, getMahasiswaDraftActions]);
+      const isSubmittedByProdi = approveProdiValue !== "" && approveProdiValue;
+      if (isSubmittedByProdi) return ["Detail"];
 
-  const determineProdiActions = useCallback((currentStatus) => {
-    if (currentStatus === "Draft") {
-      return [
-        "Detail",
-        ...(permissionData?.includes("cuti_akademik.edit") ? ["Edit"] : []),
-        ...(permissionData?.includes("cuti_akademik.delete") ? ["Delete"] : []),
-        ...(permissionData?.includes("cuti_akademik.create") ? ["Sent"] : []),
-      ];
-    }
-    if (currentStatus === "Belum Disetujui Prodi") {
-      return [
-        "Detail",
-        ...(permissionData?.includes("cuti_akademik.approve_reject") ? ["Approve", "Reject"] : []),
-      ];
-    }
-    return ["Detail"];
-  }, [permissionData]);
+      return ["Detail"];
+    },
+    [permissionData, getMahasiswaDraftActions]
+  );
 
-  const determineWadir1Actions = useCallback((currentStatus) => {
-    if (currentStatus === "Belum Disetujui Wadir 1") {
-      return [
-        "Detail",
-        ...(permissionData?.includes("cuti_akademik.approve_reject") ? ["Approve", "Reject"] : []),
-      ];
-    }
-    return ["Detail"];
-  }, [permissionData]);
+  const determineProdiActions = useCallback(
+    (currentStatus) => {
+      if (currentStatus === "Draft") {
+        return [
+          "Detail",
+          ...(permissionData?.includes("cuti_akademik.edit") ? ["Edit"] : []),
+          ...(permissionData?.includes("cuti_akademik.delete") ? ["Delete"] : []),
+          ...(permissionData?.includes("cuti_akademik.create") ? ["Sent"] : []),
+        ];
+      }
+      if (currentStatus === "Belum Disetujui Prodi") {
+        return [
+          "Detail",
+          ...(permissionData?.includes("cuti_akademik.approve_reject") ? ["Approve", "Reject"] : []),
+        ];
+      }
+      return ["Detail"];
+    },
+    [permissionData]
+  );
 
-  const determineFinanceActions = useCallback((currentStatus) => {
-    if (currentStatus === "Belum Disetujui Finance") {
-      return [
-        "Detail",
-        ...(permissionData?.includes("cuti_akademik.approve_reject") ? ["Approve", "Reject"] : []),
-      ];
-    }
-    return ["Detail"];
-  }, [permissionData]);
+  const determineWadir1Actions = useCallback(
+    (currentStatus) => {
+      if (currentStatus === "Belum Disetujui Wadir 1") {
+        return [
+          "Detail",
+          ...(permissionData?.includes("cuti_akademik.approve_reject") ? ["Approve", "Reject"] : []),
+        ];
+      }
+      return ["Detail"];
+    },
+    [permissionData]
+  );
 
-  const determineAdminActions = useCallback((currentStatus) => {
-    let actions = ["Detail"];
-    if (currentStatus === "Menunggu Upload SK" && permissionData?.includes("cuti_akademik.edit")) {
-      actions.push("Upload");
-    }
-    const isAllApprovalsComplete = currentStatus &&
-      !currentStatus.includes("Belum Disetujui Prodi") &&
-      !currentStatus.includes("Belum Disetujui Wadir 1") &&
-      !currentStatus.includes("Belum Disetujui Finance") &&
-      !currentStatus.includes("Draft") &&
-      !currentStatus.includes("Ditolak");
-    const isReadyForSK = currentStatus === "Disetujui" || isAllApprovalsComplete;
-    if (isReadyForSK && permissionData?.includes("cuti_akademik.edit")) actions.push("UploadSK");
-    if (currentStatus === "Disetujui" && permissionData?.includes("cuti_akademik.print")) actions.push("DownloadSK");
-    return actions;
-  }, [permissionData]);
+  const determineFinanceActions = useCallback(
+    (currentStatus) => {
+      if (currentStatus === "Belum Disetujui Finance") {
+        return [
+          "Detail",
+          ...(permissionData?.includes("cuti_akademik.approve_reject") ? ["Approve", "Reject"] : []),
+        ];
+      }
+      return ["Detail"];
+    },
+    [permissionData]
+  );
 
-  const determineActions = useCallback((item, currentStatus, isDraft) => {
-    if (roleId === "ROL23") return determineMahasiswaActions(item, currentStatus, isDraft);
-    if (roleId === "ROL71") return determineProdiActions(currentStatus);
-    if (roleId === "ROL999") return determineWadir1Actions(currentStatus);
-    if (roleId === "ROL01") return determineFinanceActions(currentStatus);
-    if (roleId === "ROL74") return determineAdminActions(currentStatus);
-    return ["Detail"];
-  }, [roleId, determineMahasiswaActions, determineProdiActions, determineWadir1Actions, determineFinanceActions, determineAdminActions]);
+  const determineAdminActions = useCallback(
+    (currentStatus) => {
+      let actions = ["Detail"];
+      if (currentStatus === "Menunggu Upload SK" && permissionData?.includes("cuti_akademik.edit")) {
+        actions.push("Upload");
+      }
+      const isAllApprovalsComplete =
+        currentStatus &&
+        !currentStatus.includes("Belum Disetujui Prodi") &&
+        !currentStatus.includes("Belum Disetujui Wadir 1") &&
+        !currentStatus.includes("Belum Disetujui Finance") &&
+        !currentStatus.includes("Draft") &&
+        !currentStatus.includes("Ditolak");
+      const isReadyForSK = currentStatus === "Disetujui" || isAllApprovalsComplete;
+      if (isReadyForSK && permissionData?.includes("cuti_akademik.edit")) actions.push("UploadSK");
+      if (currentStatus === "Disetujui" && permissionData?.includes("cuti_akademik.print")) actions.push("DownloadSK");
+      return actions;
+    },
+    [permissionData]
+  );
 
-  const formatTableRow = useCallback((item, index, startIndex, currentStatus, actions) => {
-    const isDraft = currentStatus === "Draft";
-    const noSK = item.SuratNo || item.suratNo || item.srt_no || item.cak_srt_no || "";
-    
-    let namaMahasiswa = item.NamaMahasiswa || item.namaMahasiswa || item.mhs_nama || item.nama_mahasiswa || "";
-    let prodi = item.Prodi || item.prodi || item.kon_nama || item.kon_singkatan || "";
-    
-    if (!namaMahasiswa || namaMahasiswa === "") namaMahasiswa = "-";
-    if (!prodi || prodi === "") prodi = "-";
+  const determineActions = useCallback(
+    (item, currentStatus, isDraft) => {
+      if (roleId === "ROL23") return determineMahasiswaActions(item, currentStatus, isDraft);
+      if (roleId === "ROL71") return determineProdiActions(currentStatus);
+      if (roleId === "ROL999") return determineWadir1Actions(currentStatus);
+      if (roleId === "ROL01") return determineFinanceActions(currentStatus);
+      if (roleId === "ROL74") return determineAdminActions(currentStatus);
+      return ["Detail"];
+    },
+    [roleId, determineMahasiswaActions, determineProdiActions, determineWadir1Actions, determineFinanceActions, determineAdminActions]
+  );
 
-    const approveProdiValue = item.approveProdi || item.cak_approve_prodi || "";
-    const isCreatedByProdi = approveProdiValue && approveProdiValue !== "";
-    
-    let noPengajuan;
-    if (isDraft && isCreatedByProdi) {
-      noPengajuan = "Draft";
-    } else if (roleId === "ROL23" && isDraft) {
-      noPengajuan = "Draft";
-    } else {
-      noPengajuan = item.id || item.idDisplay || item.cak_id || "-";
-    }
-
-    const rowData = {
-      No: startIndex + index + 1, 
-      id: item.cak_id || item.id || item.idDisplay, 
-      "No Pengajuan": noPengajuan, 
-      "Tanggal Pengajuan": item.tanggal || item.cak_created_date || "-",
-      "No SK": noSK || "-", 
-      "Nama Mahasiswa": namaMahasiswa,
-      Prodi: prodi,
-      "Disetujui Prodi": getProdiIcon(currentStatus, item),
-      "Disetujui Wadir 1": getWadir1Icon(currentStatus),
-      Status: currentStatus || "-",
-    };
-
-    if (roleId === "ROL74") {
-      rowData["SK Cuti Akademik"] = formatSKCutiAkademikColumn(currentStatus, item.cak_id || item.id || item.idDisplay);
-      rowData.Aksi = actions;
-      rowData.Alignment = new Array(11).fill("center");
-    } else {
-      rowData.Aksi = actions;
-      rowData.Alignment = new Array(10).fill("center");
-    }
-
-    return rowData;
-  }, [roleId]);
-
-  const formatSKCutiAkademikColumn = useCallback((currentStatus, id) => {
-    if (roleId === "ROL74" && currentStatus === "Menunggu Upload SK") {
-      return `<button type="button" class="btn px-1 py-0 text-primary" title="Cetak SK" onclick="window.handlePrintSK('${id}')">
+  const formatSKCutiAkademikColumn = useCallback(
+    (currentStatus, id) => {
+      if (roleId === "ROL74" && currentStatus === "Menunggu Upload SK") {
+        return `<button type="button" class="btn px-1 py-0 text-primary" title="Cetak SK" onclick="window.handlePrintSK('${id}')">
                 <i class="bi bi-printer"></i>
               </button>`;
-    }
-    return "-";
-  }, [roleId]);
+      }
+      return "-";
+    },
+    [roleId]
+  );
 
-  const getProdiIcon = useCallback((status, item) => {
+  const getProdiIcon = useCallback((status) => {
     if (!status) return "✗";
-    
     const statusLower = status.toLowerCase();
-    
-    if (statusLower === "draft") {
-      return "✗";
-    } else if (statusLower === "belum disetujui prodi") {
-      return "✗";
-    } else if (statusLower.includes("ditolak") && statusLower.includes("prodi")) {
-      return "✗";
-    } else if (statusLower === "menunggu upload sk" || 
-               statusLower.includes("disetujui") || 
-               statusLower.includes("wadir") || 
-               statusLower.includes("finance")) {
+    if (statusLower === "draft") return "✗";
+    if (statusLower === "belum disetujui prodi") return "✗";
+    if (statusLower.includes("ditolak") && statusLower.includes("prodi")) return "✗";
+    if (
+      statusLower === "menunggu upload sk" ||
+      statusLower.includes("disetujui") ||
+      statusLower.includes("wadir") ||
+      statusLower.includes("finance")
+    )
       return "✓";
-    } else {
-      return "✗";
-    }
+    return "✗";
   }, []);
 
   const getWadir1Icon = useCallback((status) => {
     if (!status) return "✗";
-    
     const statusLower = status.toLowerCase();
-    if (statusLower === "draft" || statusLower === "belum disetujui prodi") {
-      return "✗";
-    } else if (statusLower === "belum disetujui wadir 1") {
-      return "✗";
-    } else if (statusLower.includes("ditolak")) {
-      return "✗";
-    } else if (statusLower === "menunggu upload sk" || 
-               statusLower.includes("disetujui") || 
-               statusLower.includes("finance") || 
-               statusLower.includes("upload sk")) {
+    if (statusLower === "draft" || statusLower === "belum disetujui prodi") return "✗";
+    if (statusLower === "belum disetujui wadir 1") return "✗";
+    if (statusLower.includes("ditolak")) return "✗";
+    if (
+      statusLower === "menunggu upload sk" ||
+      statusLower.includes("disetujui") ||
+      statusLower.includes("finance") ||
+      statusLower.includes("upload sk")
+    )
       return "✓";
-    } else {
-      return "✗";
-    }
+    return "✗";
   }, []);
 
-  const buildMainDataParams = useCallback((roleParams, backendRole) => {
-    const { mhsId, statusFilter, userId } = roleParams;
-    const params = new URLSearchParams();
-    
-    if (roleId === "ROL23") {
-      params.append('mhsId', mhsId);
-    } else {
-      params.append('mhsId', mhsId || '%');
-    }
-    
-    if (statusFilter) params.append('status', statusFilter);
-    if (userId) params.append('userId', userId);
-    if (backendRole) params.append('role', backendRole);
-    if (search) params.append('search', search);
+  const formatTableRow = useCallback(
+    (item, index, startIndex, currentStatus, actions) => {
+      const isDraft = currentStatus === "Draft";
+      const noSK = item.SuratNo || item.suratNo || item.srt_no || item.cak_srt_no || "";
 
-    return params;
-  }, [roleId, search]);
+      let namaMahasiswa = item.NamaMahasiswa || item.namaMahasiswa || item.mhs_nama || item.nama_mahasiswa || "";
+      let prodi = item.Prodi || item.prodi || item.kon_nama || item.kon_singkatan || "";
+
+      if (!namaMahasiswa || namaMahasiswa === "") namaMahasiswa = "-";
+      if (!prodi || prodi === "") prodi = "-";
+
+      const approveProdiValue = item.approveProdi || item.cak_approve_prodi || "";
+      const isCreatedByProdi = approveProdiValue && approveProdiValue !== "";
+
+      let noPengajuan;
+      if (isDraft && isCreatedByProdi) {
+        noPengajuan = "Draft";
+      } else if (roleId === "ROL23" && isDraft) {
+        noPengajuan = "Draft";
+      } else {
+        noPengajuan = item.id || item.idDisplay || item.cak_id || "-";
+      }
+
+      const rowData = {
+        No: startIndex + index + 1,
+        id: item.cak_id || item.id || item.idDisplay,
+        "No Pengajuan": noPengajuan,
+        "Tanggal Pengajuan": item.tanggal || item.cak_created_date || "-",
+        "No SK": noSK || "-",
+        "Nama Mahasiswa": namaMahasiswa,
+        Prodi: prodi,
+        "Disetujui Prodi": getProdiIcon(currentStatus, item),
+        "Disetujui Wadir 1": getWadir1Icon(currentStatus),
+        Status: currentStatus || "-",
+      };
+
+      if (roleId === "ROL74") {
+        rowData["SK Cuti Akademik"] = formatSKCutiAkademikColumn(currentStatus, item.cak_id || item.id || item.idDisplay);
+        rowData.Aksi = actions;
+        rowData.Alignment = new Array(11).fill("center");
+      } else {
+        rowData.Aksi = actions;
+        rowData.Alignment = new Array(10).fill("center");
+      }
+
+      return rowData;
+    },
+    [roleId, getProdiIcon, getWadir1Icon, formatSKCutiAkademikColumn]
+  );
+
+  const buildMainDataParams = useCallback(
+    (roleParams, backendRole) => {
+      const { mhsId, statusFilter, userId } = roleParams;
+      const params = new URLSearchParams();
+
+      if (roleId === "ROL23") {
+        params.append("mhsId", mhsId);
+      } else {
+        params.append("mhsId", mhsId || "%");
+      }
+
+      if (statusFilter) params.append("status", statusFilter);
+      if (userId) params.append("userId", userId);
+      if (backendRole) params.append("role", backendRole);
+      if (search) params.append("search", search);
+
+      return params;
+    },
+    [roleId, search]
+  );
 
   const fetchMainData = useCallback(async (params) => {
     const url = `${API_LINK}CutiAkademik/GetAllCutiAkademik?${params}`;
 
     const [response] = await Promise.all([
-      fetch(url, {
-        method: 'GET',
-        headers: getAuthHeaders()
-      }),
-      new Promise(resolve => setTimeout(resolve, 250))
+      fetch(url, { method: "GET", headers: getAuthHeaders() }),
+      new Promise((resolve) => setTimeout(resolve, 250)),
     ]);
-    
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
@@ -440,27 +405,9 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     return data;
   }, []);
 
-  const processMainData = useCallback((actualData, page) => {
-    const pendingData = filterDataByRole(actualData);
-    const totalPendingItems = pendingData.length;
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginatedPendingData = pendingData.slice(startIndex, endIndex);
-
-    const formattedData = paginatedPendingData.map((item, index) => {
-      const currentStatus = item.status || item.cak_status || "";
-      const isDraft = currentStatus === "Draft";
-      const actions = determineActions(item, currentStatus, isDraft);
-
-      return formatTableRow(item, index, startIndex, currentStatus, actions);
-    });
-
-    return { formattedData, totalPendingItems };
-  }, [filterDataByRole, determineActions, formatTableRow, pageSize]);
-
   const extractArrayData = useCallback((data) => {
     let actualData = data;
-    if (data && typeof data === 'object') {
+    if (data && typeof data === "object") {
       if (data.data && Array.isArray(data.data)) {
         actualData = data.data;
       } else if (data.items && Array.isArray(data.items)) {
@@ -468,24 +415,41 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       } else if (data.result && Array.isArray(data.result)) {
         actualData = data.result;
       } else if (!Array.isArray(data)) {
-        const arrayProps = Object.keys(data).filter(key => Array.isArray(data[key]));
+        const arrayProps = Object.keys(data).filter((key) => Array.isArray(data[key]));
         if (arrayProps.length > 0) {
           actualData = data[arrayProps[0]];
         }
       }
     }
 
-    if (!Array.isArray(actualData)) {
-      return [];
-    }
-
+    if (!Array.isArray(actualData)) return [];
     return actualData;
   }, []);
+
+  const processMainData = useCallback(
+    (actualData, page) => {
+      const pendingData = filterDataByRole(actualData);
+      const totalPendingItems = pendingData.length;
+      const startIndex = (page - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const paginatedPendingData = pendingData.slice(startIndex, endIndex);
+
+      const formattedData = paginatedPendingData.map((item, index) => {
+        const currentStatus = item.status || item.cak_status || "";
+        const isDraft = currentStatus === "Draft";
+        const actions = determineActions(item, currentStatus, isDraft);
+        return formatTableRow(item, index, startIndex, currentStatus, actions);
+      });
+
+      return { formattedData, totalPendingItems };
+    },
+    [filterDataByRole, determineActions, formatTableRow, pageSize]
+  );
 
   const loadData = useCallback(
     async (page = 1) => {
       try {
-        setLoading(true);
+        setManualLoading(true);
 
         const roleParams = getRoleBasedParams();
         if (!roleParams) {
@@ -495,9 +459,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         }
 
         let backendRole = userData?.roleId || "";
-        if (roleId === "ROL74") {
-          backendRole = "ROL74";
-        }
+        if (roleId === "ROL74") backendRole = "ROL74";
 
         const params = buildMainDataParams(roleParams, backendRole);
         const data = await fetchMainData(params);
@@ -512,14 +474,14 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         const { formattedData, totalPendingItems } = processMainData(actualData, page);
 
         setDataCutiAkademik(formattedData);
-        setTotalData(totalPendingItems); 
+        setTotalData(totalPendingItems);
         setCurrentPage(page);
       } catch (err) {
         Toast.error(`Gagal memuat data pengajuan: ${err.message}`);
         setDataCutiAkademik([]);
         setTotalData(0);
       } finally {
-        setLoading(false);
+        setManualLoading(false);
       }
     },
     [roleId, userData, search, prodiKonsentrasi, getRoleBasedParams, buildMainDataParams, fetchMainData, extractArrayData, processMainData]
@@ -527,19 +489,20 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
   const buildRiwayatParams = useCallback(() => {
     const params = new URLSearchParams();
-    
+
     if (roleId !== "ROL74" && userData?.username) {
-      const userIdentifier = roleId === "ROL23"
-        ? (userData?.mhsId || userData?.nama || userData?.username)
-        : userData?.username;
-      params.append('userId', userIdentifier);
+      const userIdentifier =
+        roleId === "ROL23"
+          ? userData?.mhsId || userData?.nama || userData?.username
+          : userData?.username;
+      params.append("userId", userIdentifier);
     }
-    
+
     if (roleId === "ROL71" && prodiKonsentrasi) {
-      const cleanKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, '').trim();
-      params.append('konsentrasi', cleanKonsentrasi);
+      const cleanKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, "").trim();
+      params.append("konsentrasi", cleanKonsentrasi);
     }
-    
+
     return params;
   }, [roleId, userData, prodiKonsentrasi]);
 
@@ -547,13 +510,10 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     const url = `${API_LINK}CutiAkademik/GetRiwayatCutiAkademik?${params}`;
 
     const [response] = await Promise.all([
-      fetch(url, {
-        method: 'GET',
-        headers: getAuthHeaders()
-      }),
-      new Promise(resolve => setTimeout(resolve, 250))
+      fetch(url, { method: "GET", headers: getAuthHeaders() }),
+      new Promise((resolve) => setTimeout(resolve, 250)),
     ]);
-    
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
@@ -571,23 +531,20 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
   const parseDateFromString = useCallback((tanggalStr) => {
     if (!tanggalStr) return null;
-    
     const dateMatch = tanggalStr.match(/(\d{2})\s+(\w+)\s+(\d{4})/);
     if (!dateMatch) return null;
-    
     const [, , monthName, year] = dateMatch;
     const monthMap = {
-      'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
-      'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+      Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
+      Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
     };
-    
     const month = monthMap[monthName];
     return month ? { month, year } : null;
   }, []);
 
   const convertToRomanMonth = useCallback((month) => {
-    const romanMonths = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
-    return romanMonths[month] || '';
+    const romanMonths = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+    return romanMonths[month] || "";
   }, []);
 
   const extractSequenceFromId = useCallback((idStr) => {
@@ -596,216 +553,207 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     return sequenceMatch ? sequenceMatch[1] : "001";
   }, []);
 
-  const generateSKNumber = useCallback((item) => {
-    let nomorSK = item.SuratNo || item.suratNo || item.srt_no || item.cak_srt_no || "";
-    
-    if (!nomorSK && item.status === "Disetujui") {
-      try {
-        const tanggalStr = item.tanggal || item.cak_created_date || "";
-        const dateInfo = parseDateFromString(tanggalStr);
-        
-        if (dateInfo) {
-          const romanMonth = convertToRomanMonth(dateInfo.month);
-          const idStr = item.id || item.cak_id || "";
-          const sequence = extractSequenceFromId(idStr);
-          
-          nomorSK = `${sequence}/PA-WADIR-I/SKC/${romanMonth}/${dateInfo.year}`;
+  const generateSKNumber = useCallback(
+    (item) => {
+      let nomorSK = item.SuratNo || item.suratNo || item.srt_no || item.cak_srt_no || "";
+
+      if (!nomorSK && item.status === "Disetujui") {
+        try {
+          const tanggalStr = item.tanggal || item.cak_created_date || "";
+          const dateInfo = parseDateFromString(tanggalStr);
+
+          if (dateInfo) {
+            const romanMonth = convertToRomanMonth(dateInfo.month);
+            const idStr = item.id || item.cak_id || "";
+            const sequence = extractSequenceFromId(idStr);
+            nomorSK = `${sequence}/PA-WADIR-I/SKC/${romanMonth}/${dateInfo.year}`;
+          }
+        } catch {
+          // ignore
         }
-      } catch {
       }
-    }
-    
-    return nomorSK;
-  }, [parseDateFromString, convertToRomanMonth, extractSequenceFromId]);
+
+      return nomorSK;
+    },
+    [parseDateFromString, convertToRomanMonth, extractSequenceFromId]
+  );
 
   const fetchMissingData = useCallback(async (item, namaMahasiswa, prodi) => {
     if (!namaMahasiswa || !prodi || namaMahasiswa === "" || prodi === "") {
       try {
         const detailUrl = `${API_LINK}CutiAkademik/GetDetailCutiAkademik?id=${item.id || item.cak_id}`;
-        
-        const detailResponse = await fetch(detailUrl, {
-          method: 'GET',
-          headers: getAuthHeaders()
-        });
-        
+        const detailResponse = await fetch(detailUrl, { method: "GET", headers: getAuthHeaders() });
+
         if (detailResponse.ok) {
           const detailData = await detailResponse.json();
-          
+
           if (!namaMahasiswa || namaMahasiswa === "") {
-            namaMahasiswa = detailData.mahasiswa ||           
-                           detailData.mhs_nama || 
-                           detailData.namaMahasiswa || 
-                           detailData.nama_mahasiswa || 
-                           detailData.mahasiswaNama ||
-                           detailData.nama ||
-                           detailData.name || "-";
+            namaMahasiswa =
+              detailData.mahasiswa ||
+              detailData.mhs_nama ||
+              detailData.namaMahasiswa ||
+              detailData.nama_mahasiswa ||
+              detailData.mahasiswaNama ||
+              detailData.nama ||
+              detailData.name ||
+              "-";
           }
-          
+
           if (!prodi || prodi === "") {
-            prodi = detailData.konsentrasi ||                 
-                   detailData.prodiNama ||                    
-                   detailData.konsentrasiSingkatan ||         
-                   detailData.kon_singkatan || 
-                   detailData.prodi || 
-                   detailData.programStudi || 
-                   detailData.program_studi || 
-                   detailData.jurusan || "-";
+            prodi =
+              detailData.konsentrasi ||
+              detailData.prodiNama ||
+              detailData.konsentrasiSingkatan ||
+              detailData.kon_singkatan ||
+              detailData.prodi ||
+              detailData.programStudi ||
+              detailData.program_studi ||
+              detailData.jurusan ||
+              "-";
           }
         }
       } catch {
+        // ignore
       }
     }
-    
-    return {
-      namaMahasiswa: namaMahasiswa || "-",
-      prodi: prodi || "-"
-    };
+
+    return { namaMahasiswa: namaMahasiswa || "-", prodi: prodi || "-" };
   }, []);
 
-  const formatRiwayatItem = useCallback(async (item, index) => {
-    let namaMahasiswa = item.NamaMahasiswa || item.namaMahasiswa || item.mhs_nama || 
-                       item.nama_mahasiswa || item.mahasiswaNama || item.mahasiswa || 
-                       item.nama || item.name || "";
+  const formatRiwayatItem = useCallback(
+    async (item, index) => {
+      let namaMahasiswa =
+        item.NamaMahasiswa || item.namaMahasiswa || item.mhs_nama ||
+        item.nama_mahasiswa || item.mahasiswaNama || item.mahasiswa ||
+        item.nama || item.name || "";
 
-    let prodi = item.Prodi || item.prodi || item.kon_nama || item.kon_singkatan || 
-               item.konsentrasi || item.konsentrasiSingkatan || item.programStudi || 
-               item.program_studi || item.prodiNama || "";
+      let prodi =
+        item.Prodi || item.prodi || item.kon_nama || item.kon_singkatan ||
+        item.konsentrasi || item.konsentrasiSingkatan || item.programStudi ||
+        item.program_studi || item.prodiNama || "";
 
-    const missingData = await fetchMissingData(item, namaMahasiswa, prodi);
-    namaMahasiswa = missingData.namaMahasiswa;
-    prodi = missingData.prodi;
+      const missingData = await fetchMissingData(item, namaMahasiswa, prodi);
+      namaMahasiswa = missingData.namaMahasiswa;
+      prodi = missingData.prodi;
 
-    const nomorSK = generateSKNumber(item);
+      const nomorSK = generateSKNumber(item);
 
-    return {
-      No: index + 1,
-      id: item.cak_id || item.id,
-      "No Cuti Akademik": item.id || item.cak_id || "-",
-      "Tanggal Pengajuan": item.tanggal || item.cak_created_date || "-",
-      "Nomor SK": nomorSK || "-",
-      NIM: item.mhsId || item.mhs_id || item.cak_mhs_id || "-",
-      "Nama Mahasiswa": namaMahasiswa,
-      Prodi: prodi,
-      Aksi: ["Detail"],
-      Alignment: new Array(8).fill("center"),
-    };
-  }, [fetchMissingData, generateSKNumber]);
+      return {
+        No: index + 1,
+        id: item.cak_id || item.id,
+        "No Cuti Akademik": item.id || item.cak_id || "-",
+        "Tanggal Pengajuan": item.tanggal || item.cak_created_date || "-",
+        "Nomor SK": nomorSK || "-",
+        NIM: item.mhsId || item.mhs_id || item.cak_mhs_id || "-",
+        "Nama Mahasiswa": namaMahasiswa,
+        Prodi: prodi,
+        Aksi: ["Detail"],
+        Alignment: new Array(8).fill("center"),
+      };
+    },
+    [fetchMissingData, generateSKNumber]
+  );
 
-  // Helper function to normalize text for search
   const normalizeText = useCallback((text) => {
     return String(text)
       .toLowerCase()
-      .replaceAll(/[^\w\s]/g, '')
-      .replaceAll(/\s+/g, ' ')
+      .replaceAll(/[^\w\s]/g, "")
+      .replaceAll(/\s+/g, " ")
       .trim();
   }, []);
 
-  // Helper function to check if search term matches fields
-  const matchesSearchTerm = useCallback((normalizedFields, normalizedSearchTerm) => {
-    // Check if any field contains the search term
-    const fieldMatch = normalizedFields.some(field => 
-      field.includes(normalizedSearchTerm)
-    );
-    
-    if (fieldMatch) return true;
-    
-    // Check combined text for multi-word searches
-    const combinedText = normalizedFields.join(' ');
-    if (combinedText.includes(normalizedSearchTerm)) return true;
-    
-    // Check for partial matches in each word
-    const searchWords = normalizedSearchTerm.split(' ').filter(w => w.length > 0);
-    return searchWords.every(word => 
-      normalizedFields.some(field => field.includes(word))
-    );
-  }, []);
+  const matchesSearchTerm = useCallback(
+    (normalizedFields, normalizedSearchTerm) => {
+      const fieldMatch = normalizedFields.some((field) => field.includes(normalizedSearchTerm));
+      if (fieldMatch) return true;
 
-  const applySearchFilter = useCallback((data, searchTerm) => {
-    if (!searchTerm || searchTerm.trim() === "") return data;
-    
-    const normalizedSearchTerm = normalizeText(searchTerm);
-    
-    return data.filter(item => {
-      const searchableFields = [
-        String(item["No Cuti Akademik"] || ""),
-        String(item["Tanggal Pengajuan"] || ""),
-        String(item["Nomor SK"] || ""),
-        String(item.NIM || ""),
-        String(item["Nama Mahasiswa"] || ""),
-        String(item.Prodi || "")
-      ];
-      
-      const normalizedFields = searchableFields.map(field => normalizeText(field));
-      
-      return matchesSearchTerm(normalizedFields, normalizedSearchTerm);
-    });
-  }, [normalizeText, matchesSearchTerm]);
+      const combinedText = normalizedFields.join(" ");
+      if (combinedText.includes(normalizedSearchTerm)) return true;
+
+      const searchWords = normalizedSearchTerm.split(" ").filter((w) => w.length > 0);
+      return searchWords.every((word) => normalizedFields.some((field) => field.includes(word)));
+    },
+    []
+  );
+
+  const applySearchFilter = useCallback(
+    (data, searchTerm) => {
+      if (!searchTerm || searchTerm.trim() === "") return data;
+
+      const normalizedSearchTerm = normalizeText(searchTerm);
+
+      return data.filter((item) => {
+        const searchableFields = [
+          String(item["No Cuti Akademik"] || ""),
+          String(item["Tanggal Pengajuan"] || ""),
+          String(item["Nomor SK"] || ""),
+          String(item.NIM || ""),
+          String(item["Nama Mahasiswa"] || ""),
+          String(item.Prodi || ""),
+        ];
+
+        const normalizedFields = searchableFields.map((field) => normalizeText(field));
+        return matchesSearchTerm(normalizedFields, normalizedSearchTerm);
+      });
+    },
+    [normalizeText, matchesSearchTerm]
+  );
 
   const applyProdiFilter = useCallback((data, prodiFilter) => {
     if (!prodiFilter || prodiFilter.trim() === "") return data;
-    
-    return data.filter(item => {
+
+    return data.filter((item) => {
       const itemProdi = String(item.Prodi || "").trim();
-      const filterProdi = prodiFilter.trim();
-      
-      // Exact match
-      if (itemProdi === filterProdi) return true;
-      
-      // Check if item contains filter (e.g., "Manajemen Informatika (MI)" contains "Manajemen Informatika")
-      if (itemProdi.includes(filterProdi)) return true;
-      
-      // Check if filter contains item
-      if (filterProdi.includes(itemProdi)) return true;
-      
-      // Extract name without prefix and suffix for comparison
-      // Remove D3/D4 prefix and (XX) suffix from both
-      const cleanFilter = filterProdi
-        .replaceAll(/^D[34]\s+/gi, '') // Remove D3 or D4 prefix
-        .replaceAll(/\s*\([^)]*\)\s*$/g, '') // Remove (XX) suffix
+      const filterProdiVal = prodiFilter.trim();
+
+      if (itemProdi === filterProdiVal) return true;
+      if (itemProdi.includes(filterProdiVal)) return true;
+      if (filterProdiVal.includes(itemProdi)) return true;
+
+      const cleanFilter = filterProdiVal
+        .replaceAll(/^D[34]\s+/gi, "")
+        .replaceAll(/\s*\([^)]*\)\s*$/g, "")
         .trim();
-      
+
       const cleanItem = itemProdi
-        .replaceAll(/^D[34]\s+/gi, '')
-        .replaceAll(/\s*\([^)]*\)\s*$/g, '')
+        .replaceAll(/^D[34]\s+/gi, "")
+        .replaceAll(/\s*\([^)]*\)\s*$/g, "")
         .trim();
-      
-      // Compare cleaned names (case insensitive)
+
       const cleanFilterLower = cleanFilter.toLowerCase();
       const cleanItemLower = cleanItem.toLowerCase();
-      
-      return cleanItemLower === cleanFilterLower || 
-             cleanItemLower.includes(cleanFilterLower) || 
-             cleanFilterLower.includes(cleanItemLower);
+
+      return (
+        cleanItemLower === cleanFilterLower ||
+        cleanItemLower.includes(cleanFilterLower) ||
+        cleanFilterLower.includes(cleanItemLower)
+      );
     });
   }, []);
 
-  const applySorting = useCallback((data, sortBy) => {
-    if (!sortBy || sortBy === "") return data;
-    
+  const applySorting = useCallback((data, sortByVal) => {
+    if (!sortByVal || sortByVal === "") return data;
+
     return [...data].sort((a, b) => {
       let valueA, valueB;
-      
-      switch (sortBy) {
+
+      switch (sortByVal) {
         case "tanggal_desc":
           valueA = new Date(a["Tanggal Pengajuan"] || "1900-01-01");
           valueB = new Date(b["Tanggal Pengajuan"] || "1900-01-01");
           return valueB - valueA;
-          
         case "tanggal_asc":
           valueA = new Date(a["Tanggal Pengajuan"] || "1900-01-01");
           valueB = new Date(b["Tanggal Pengajuan"] || "1900-01-01");
           return valueA - valueB;
-          
         case "id_asc":
           valueA = String(a["No Cuti Akademik"] || "");
           valueB = String(b["No Cuti Akademik"] || "");
           return valueA.localeCompare(valueB);
-          
         case "id_desc":
           valueA = String(a["No Cuti Akademik"] || "");
           valueB = String(b["No Cuti Akademik"] || "");
           return valueB.localeCompare(valueA);
-          
         default:
           return 0;
       }
@@ -815,6 +763,8 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const loadDataRiwayat = useCallback(
     async (page = 1) => {
       try {
+        setManualLoading(true);
+
         const params = buildRiwayatParams();
         const data = await fetchRiwayatData(params);
         const actualData = extractArrayData(data);
@@ -825,23 +775,19 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
           return;
         }
 
-        const completedData = actualData.filter(item => {
+        const completedData = actualData.filter((item) => {
           const currentStatus = item.status || item.cak_status || "";
           return currentStatus === "Disetujui";
         });
 
-        const formattedDataPromises = completedData.map((item, index) => 
-          formatRiwayatItem(item, index)
-        );
-        
+        const formattedDataPromises = completedData.map((item, index) => formatRiwayatItem(item, index));
         let allFormattedData = await Promise.all(formattedDataPromises);
 
-        // Filter berdasarkan konsentrasi prodi (client-side fallback)
         if (roleId === "ROL71" && prodiKonsentrasi) {
-          const cleanProdiKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, '').trim();
-          allFormattedData = allFormattedData.filter(item => {
+          const cleanProdiKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, "").trim();
+          allFormattedData = allFormattedData.filter((item) => {
             const itemProdi = String(item.Prodi || "").trim();
-            const cleanItemProdi = itemProdi.replace(/\s*\([^)]*\)\s*$/, '').trim();
+            const cleanItemProdi = itemProdi.replace(/\s*\([^)]*\)\s*$/, "").trim();
             return cleanItemProdi === cleanProdiKonsentrasi;
           });
         }
@@ -857,46 +803,48 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
         const finalData = paginatedData.map((item, index) => ({
           ...item,
-          No: startIndex + index + 1
+          No: startIndex + index + 1,
         }));
 
         setDataRiwayat(finalData);
-        setTotalDataRiwayat(totalFilteredItems); 
+        setTotalDataRiwayat(totalFilteredItems);
         setCurrentPageRiwayat(page);
       } catch (err) {
         Toast.error(`Gagal memuat data riwayat: ${err.message}`);
         setDataRiwayat([]);
         setTotalDataRiwayat(0);
+      } finally {
+        setManualLoading(false);
       }
     },
-    [userData, searchRiwayat, sortBy, filterProdi, roleId, pageSize, buildRiwayatParams, fetchRiwayatData, extractArrayData, formatRiwayatItem, applySearchFilter, applyProdiFilter, applySorting]
+    [userData, searchRiwayat, sortBy, filterProdi, roleId, pageSize, prodiKonsentrasi, buildRiwayatParams, fetchRiwayatData, extractArrayData, formatRiwayatItem, applySearchFilter, applyProdiFilter, applySorting]
   );
-  
+
   const validateUserForSubmission = useCallback(() => {
     const modifiedBy = userData?.nama || userData?.mhsId || userData?.userid || userData?.username || "";
-    
     if (!modifiedBy) {
       Toast.error("Data user tidak lengkap. Silakan login ulang.");
       return null;
     }
-    
     return modifiedBy;
   }, [userData]);
 
-  const buildSubmissionPayload = useCallback((id, modifiedBy) => {
-    const basePayload = { draftId: id, modifiedBy: modifiedBy };
-    if (roleId === "ROL71") {
-      return { payload: basePayload, url: `${API_LINK}CutiAkademik/GenerateIdFinalCutiAkademikByProdi` };
-    }
-    return { payload: basePayload, url: `${API_LINK}CutiAkademik/GenerateIdFinalCutiAkademik` };
-  }, [roleId]);
+  const buildSubmissionPayload = useCallback(
+    (id, modifiedBy) => {
+      const basePayload = { draftId: id, modifiedBy: modifiedBy };
+      if (roleId === "ROL71") {
+        return { payload: basePayload, url: `${API_LINK}CutiAkademik/GenerateIdFinalCutiAkademikByProdi` };
+      }
+      return { payload: basePayload, url: `${API_LINK}CutiAkademik/GenerateIdFinalCutiAkademik` };
+    },
+    [roleId]
+  );
 
   const handleSubmissionError = useCallback((res, raw) => {
-    
     try {
       const errorData = JSON.parse(raw);
       let errorMsg = errorData.message || errorData.error || `HTTP ${res.status}: ${res.statusText}`;
-      
+
       if (raw.includes("PRIMARY KEY constraint") || raw.includes("duplicate key")) {
         errorMsg = "ID pengajuan sudah ada. Sistem akan mencoba generate ID baru. Silakan coba lagi.";
         setTimeout(() => {
@@ -905,7 +853,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       } else if (raw.includes("SqlException")) {
         errorMsg = "Terjadi kesalahan database. Silakan coba lagi atau hubungi admin.";
       }
-      
+
       Toast.error(`Gagal mengajukan: ${errorMsg}`);
     } catch {
       if (raw.includes("PRIMARY KEY constraint")) {
@@ -918,22 +866,95 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     }
   }, []);
 
-  const handleSubmissionSuccess = useCallback((result, id) => {
-    if (result?.finalId) {
-      Toast.success(`Pengajuan berhasil diajukan dengan ID: ${result.finalId}`);
-      
-      if (roleId === "ROL71") {
-        const prodiCreatedApps = JSON.parse(sessionStorage.getItem('prodiCreatedApps') || '[]');
-        const updatedApps = prodiCreatedApps.filter(appId => appId !== id);
-        sessionStorage.setItem('prodiCreatedApps', JSON.stringify(updatedApps));
+  const handleSubmissionSuccess = useCallback(
+    (result, id) => {
+      if (result?.finalId) {
+        Toast.success(`Pengajuan berhasil diajukan dengan ID: ${result.finalId}`);
+
+        if (roleId === "ROL71") {
+          const prodiCreatedApps = JSON.parse(sessionStorage.getItem("prodiCreatedApps") || "[]");
+          const updatedApps = prodiCreatedApps.filter((appId) => appId !== id);
+          sessionStorage.setItem("prodiCreatedApps", JSON.stringify(updatedApps));
+        }
+
+        loadData(1);
+      } else {
+        const errorMsg = result?.message || result?.error || "Gagal mengajukan pengajuan.";
+        Toast.error(errorMsg);
       }
-      
-      loadData(1);
-    } else {
-      const errorMsg = result?.message || result?.error || "Gagal mengajukan pengajuan.";
-      Toast.error(errorMsg);
+    },
+    [roleId, loadData]
+  );
+
+  const handleSearchRiwayat = useCallback(
+    (query) => {
+      setSearchRiwayat(query);
+      setCurrentPageRiwayat(1);
+      loadDataRiwayat(1);
+    },
+    [loadDataRiwayat]
+  );
+
+  const handleFilterApplyRiwayat = useCallback(() => {
+    setSortBy(sortRef.current.value);
+    setFilterProdi(prodiRef.current.value);
+    loadDataRiwayat(1);
+  }, [loadDataRiwayat]);
+
+  const handleNavigation = useCallback((page) => loadData(page), [loadData]);
+
+  const handleNavigationRiwayat = useCallback((page) => loadDataRiwayat(page), [loadDataRiwayat]);
+
+  const handleAdd = useCallback(() => {
+    router.push("/pages/administrasi-akademik/cuti-akademik/add");
+  }, [router]);
+
+  const handleDetail = useCallback(
+    (id) =>
+      router.push(`/pages/administrasi-akademik/cuti-akademik/detail/${encryptIdUrl(id)}`),
+    [router]
+  );
+
+  const handleEdit = useCallback(
+    (id) =>
+      router.push(`/pages/administrasi-akademik/cuti-akademik/edit/${encryptIdUrl(id)}`),
+    [router]
+  );
+
+  const handleDelete = async (id) => {
+    const confirm = await SweetAlert({
+      title: "Hapus Pengajuan",
+      text: "Yakin ingin menghapus pengajuan ini?",
+      icon: "warning",
+      confirmText: "Ya, Hapus!",
+    });
+
+    if (!confirm) return;
+
+    setManualLoading(true);
+
+    try {
+      const url = `${API_LINK}CutiAkademik/DeleteCutiAkademik/${id}`;
+      const res = await fetch(url, { method: "DELETE", headers: getAuthHeaders() });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+
+      if (data.message?.includes("berhasil")) {
+        Toast.success(data.message);
+        loadData(1);
+      } else {
+        throw new Error(data.message || "Gagal menghapus pengajuan");
+      }
+    } catch (err) {
+      Toast.error(err.message);
+    } finally {
+      setManualLoading(false);
     }
-  }, [roleId, loadData]);
+  };
 
   const handleAjukan = async (id) => {
     const confirm = await SweetAlert({
@@ -945,7 +966,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
     if (!confirm) return;
 
-    setLoading(true);
+    setManualLoading(true);
 
     try {
       const modifiedBy = validateUserForSubmission();
@@ -955,15 +976,12 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
       const res = await fetch(url, {
         method: "PUT",
-        headers: { 
-          ...getAuthHeaders(),
-          "Accept": "application/json"
-        },
+        headers: { ...getAuthHeaders(), Accept: "application/json" },
         body: JSON.stringify(payload),
       });
 
       const raw = await res.text();
-      
+
       if (!res.ok) {
         handleSubmissionError(res, raw);
         return;
@@ -981,94 +999,10 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     } catch (err) {
       Toast.error(`Gagal mengajukan: ${err.message}`);
     } finally {
-      setLoading(false);
+      setManualLoading(false);
     }
   };
 
-  const handleSearchRiwayat = useCallback(
-    (query) => {
-      setSearchRiwayat(query);
-      setCurrentPageRiwayat(1); 
-      loadDataRiwayat(1);
-    },
-    [loadDataRiwayat]
-  );
-
-  const handleFilterApplyRiwayat = useCallback(() => {
-    setSortBy(sortRef.current.value);
-    setFilterProdi(prodiRef.current.value);
-    loadDataRiwayat(1);
-  }, [loadDataRiwayat]);
-
-  const handleNavigation = useCallback(
-    (page) => loadData(page),
-    [loadData]
-  );
-
-  const handleNavigationRiwayat = useCallback(
-    (page) => loadDataRiwayat(page),
-    [loadDataRiwayat]
-  );
-
-  const handleAdd = () => {
-    router.push("/pages/administrasi-akademik/cuti-akademik/add");
-  };
-
-  const handleDetail = (id) =>
-    router.push(
-      `/pages/administrasi-akademik/cuti-akademik/detail/${encryptIdUrl(
-        id
-      )}`
-    );
-
-  const handleEdit = (id) => {
-    router.push(
-      `/pages/administrasi-akademik/cuti-akademik/edit/${encryptIdUrl(id)}`
-    );
-  };
-
-  const handleDelete = async (id) => {
-    const confirm = await SweetAlert({
-      title: "Hapus Pengajuan",
-      text: "Yakin ingin menghapus pengajuan ini?",
-      icon: "warning",
-      confirmText: "Ya, Hapus!",
-    });
-
-    if (!confirm) return;
-
-    setLoading(true);
-
-    try {
-      
-      const url = `${API_LINK}CutiAkademik/DeleteCutiAkademik/${id}`;
-
-      const res = await fetch(url, { 
-        method: "DELETE",
-        headers: getAuthHeaders()
-      });
-      
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      }
-
-      const data = await res.json();
-
-      
-      if (data.message?.includes("berhasil")) {
-        Toast.success(data.message);
-        loadData(1);
-      } else {
-        throw new Error(data.message || "Gagal menghapus pengajuan");
-      }
-    } catch (err) {
-      Toast.error(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  
   const handleApprove = async (itemId) => {
     const confirm = await SweetAlert({
       title: "Setujui Pengajuan Cuti Akademik",
@@ -1079,14 +1013,14 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
     if (!confirm) return;
 
-    setLoading(true);
+    setManualLoading(true);
 
     try {
       const approvedBy = userData?.nama || userData?.username || userData?.userid || "";
-      
+
       if (!approvedBy) {
         Toast.error("Data user tidak lengkap. Silakan login ulang.");
-        setLoading(false);
+        setManualLoading(false);
         return;
       }
 
@@ -1101,23 +1035,19 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         payload = { id: itemId, role: roleId, approvedBy: approvedBy };
       } else {
         Toast.error("Role tidak dikenali untuk approval.");
-        setLoading(false);
+        setManualLoading(false);
         return;
       }
 
       const res = await fetch(url, {
         method: "PUT",
-        headers: { 
-          ...getAuthHeaders(),
-          "Accept": "application/json"
-        },
-        body: JSON.stringify(payload)
+        headers: { ...getAuthHeaders(), Accept: "application/json" },
+        body: JSON.stringify(payload),
       });
 
       const raw = await res.text();
 
       if (!res.ok) {
-        
         try {
           const errorData = JSON.parse(raw);
           const errorMsg = errorData.message || errorData.error || `HTTP ${res.status}`;
@@ -1128,42 +1058,36 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         return;
       }
 
-      
       try {
         JSON.parse(raw);
       } catch {
-        
+        // ignore
       }
 
-      
       Toast.success("Pengajuan cuti akademik berhasil disetujui!");
-      loadData(1); 
-      
+      loadData(1);
     } catch (err) {
       Toast.error(`Gagal menyetujui: ${err.message}`);
     } finally {
-      setLoading(false);
+      setManualLoading(false);
     }
   };
 
   const validateUserForRejection = useCallback(() => {
     const username = userData?.nama || userData?.username || userData?.userid || "";
-    
     if (!username) {
       Toast.error("Data user tidak lengkap. Silakan login ulang.");
       return null;
     }
-    
     return username;
   }, [userData]);
 
-  const handleRejectionError = useCallback((res, errorText, payload) => {
-    
+  const handleRejectionError = useCallback((res, errorText) => {
     let errorMessage = `HTTP ${res.status}: ${res.statusText}`;
-    
+
     try {
       const errorData = JSON.parse(errorText);
-      
+
       if (errorData.message) {
         errorMessage = errorData.message;
       } else if (errorData.error) {
@@ -1171,37 +1095,39 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       } else if (errorData.details) {
         errorMessage = errorData.details;
       }
-      
+
       if (errorData.errors) {
         const validationErrors = Object.values(errorData.errors).flat();
-        errorMessage = validationErrors.join(', ');
+        errorMessage = validationErrors.join(", ");
       }
-      
     } catch {
       errorMessage = `${errorMessage}\n\nRaw response: ${errorText}`;
     }
-    
+
     Toast.error(`Gagal menolak pengajuan: ${errorMessage}`);
   }, []);
 
-  const handleRejectionSuccess = useCallback((result) => {
-    if (result && (result.rejected === true || result.success === true || 
-        result.message?.toLowerCase().includes("berhasil"))) {
-      
-      const successMessage = result.message || 
-        `Pengajuan berhasil ditolak oleh ${result.role || 'sistem'}`;
-      
-      Toast.success(successMessage);
-      loadData(1);
-      if (showRiwayat) loadDataRiwayat(1);
-      
-      return true;
-    } else {
-      const errorMessage = result?.message || result?.error || "Gagal menolak pengajuan";
-      Toast.error(errorMessage);
-      return false;
-    }
-  }, [loadData, loadDataRiwayat, showRiwayat]);
+  const handleRejectionSuccess = useCallback(
+    (result) => {
+      if (
+        result &&
+        (result.rejected === true ||
+          result.success === true ||
+          result.message?.toLowerCase().includes("berhasil"))
+      ) {
+        const successMessage = result.message || `Pengajuan berhasil ditolak oleh ${result.role || "sistem"}`;
+        Toast.success(successMessage);
+        loadData(1);
+        if (showRiwayat) loadDataRiwayat(1);
+        return true;
+      } else {
+        const errorMessage = result?.message || result?.error || "Gagal menolak pengajuan";
+        Toast.error(errorMessage);
+        return false;
+      }
+    },
+    [loadData, loadDataRiwayat, showRiwayat]
+  );
 
   const handleReject = async (itemId) => {
     const confirm = await SweetAlert({
@@ -1213,35 +1139,28 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
     if (!confirm) return;
 
-    setLoading(true);
+    setManualLoading(true);
 
     try {
       const username = validateUserForRejection();
       if (!username) {
-        setLoading(false);
+        setManualLoading(false);
         return;
       }
 
-      const payload = {
-        id: itemId,
-        role: roleId,
-        username: username
-      };
-
+      const payload = { id: itemId, role: roleId, username: username };
       const url = `${API_LINK}CutiAkademik/RejectCutiAkademik`;
+
       const res = await fetch(url, {
         method: "PUT",
-        headers: { 
-          ...getAuthHeaders(),
-          "Accept": "application/json"
-        },
-        body: JSON.stringify(payload)
+        headers: { ...getAuthHeaders(), Accept: "application/json" },
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const errorText = await res.text();
-        handleRejectionError(res, errorText, payload);
-        setLoading(false);
+        handleRejectionError(res, errorText);
+        setManualLoading(false);
         return;
       }
 
@@ -1251,17 +1170,15 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       try {
         result = JSON.parse(responseText);
       } catch {
-        
         if (res.status === 200) {
           Toast.success("Pengajuan berhasil ditolak!");
           loadData(1);
           if (showRiwayat) loadDataRiwayat(1);
-          setLoading(false);
+          setManualLoading(false);
           return;
         }
-        
         Toast.error("Response server tidak valid. Periksa console untuk detail.");
-        setLoading(false);
+        setManualLoading(false);
         return;
       }
 
@@ -1269,30 +1186,22 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     } catch (err) {
       Toast.error(`Gagal menolak pengajuan: ${err.message}`);
     } finally {
-      setLoading(false);
+      setManualLoading(false);
     }
   };
 
   const handleUpload = (id) => {
-    // Use modal upload instead of redirecting to separate page
     setSelectedCutiId(id);
     setShowUploadModal(true);
     setSelectedSKFile(null);
     setSKFilePreview(null);
   };
 
-
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [selectedCutiId, setSelectedCutiId] = useState(null);
-  const [selectedSKFile, setSelectedSKFile] = useState(null);
-  const [skFilePreview, setSKFilePreview] = useState(null);
-  const [uploadLoading, setUploadLoading] = useState(false);
-
   const handleSKFileSelect = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    const allowedTypes = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
     if (!allowedTypes.includes(file.type)) {
       Toast.error("Format file tidak didukung. Gunakan PDF, JPG, JPEG, atau PNG.");
       return;
@@ -1304,8 +1213,8 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     }
 
     setSelectedSKFile(file);
-    
-    if (file.type.startsWith('image/')) {
+
+    if (file.type.startsWith("image/")) {
       const reader = new FileReader();
       reader.onload = (e) => setSKFilePreview(e.target.result);
       reader.readAsDataURL(file);
@@ -1328,19 +1237,18 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     }
 
     setUploadLoading(true);
+    setManualLoading(true);
 
     try {
       const formData = new FormData();
-      formData.append('Id', selectedCutiId);
-      formData.append('FileSK', selectedSKFile);
-      formData.append('UploadBy', userData?.nama || userData?.username || 'user_admin');
+      formData.append("Id", selectedCutiId);
+      formData.append("FileSK", selectedSKFile);
+      formData.append("UploadBy", userData?.nama || userData?.username || "user_admin");
 
       const response = await fetch(`${API_LINK}CutiAkademik/UploadSKCutiAkademik`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${Cookies.get("jwtToken")}`
-        },
-        body: formData
+        method: "PUT",
+        headers: { Authorization: `Bearer ${Cookies.get("jwtToken")}` },
+        body: formData,
       });
 
       if (!response.ok) {
@@ -1354,16 +1262,16 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       setSelectedSKFile(null);
       setSKFilePreview(null);
       setSelectedCutiId(null);
-      
+
       await loadData(currentPage);
       if (showRiwayat) {
         await loadDataRiwayat(currentPageRiwayat);
       }
-
     } catch (error) {
       Toast.error(`Gagal upload SK: ${error.message}`);
     } finally {
       setUploadLoading(false);
+      setManualLoading(false);
     }
   };
 
@@ -1371,30 +1279,23 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     try {
       const token = Cookies.get("jwtToken");
       const printUrl = `${API_LINK}CutiAkademik/DownloadFileCutiAkademik/${id}`;
-      
-      // Open in new tab with authentication
+
       const response = await fetch(printUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': '*/*'
-        }
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}`, Accept: "*/*" },
       });
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      // Create blob and open in new tab
       const blob = await response.blob();
       const url = globalThis.URL.createObjectURL(blob);
       globalThis.open(url, "_blank");
-      
-      // Clean up after a delay to allow the tab to load
+
       setTimeout(() => {
         globalThis.URL.revokeObjectURL(url);
       }, 1000);
-      
     } catch (error) {
       Toast.error(`Gagal membuka file: ${error.message}`);
     }
@@ -1420,15 +1321,13 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
   const handleDownloadError = useCallback(async (response) => {
     let errorMessage = "Gagal download SK.";
-    
     try {
       const errorData = await response.json();
-      if (errorData.message) {
-        errorMessage = errorData.message;
-      }
+      if (errorData.message) errorMessage = errorData.message;
     } catch {
+      // ignore
     }
-    
+
     if (response.status === 403) {
       Toast.warning(errorMessage);
     } else if (response.status === 404) {
@@ -1441,7 +1340,7 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
   const handlePdfDownload = useCallback(async (response, id) => {
     const blob = await response.blob();
     const url = globalThis.URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
     link.download = `SK_Cuti_Akademik_${id}.pdf`;
     document.body.appendChild(link);
@@ -1460,40 +1359,34 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     }
   }, []);
 
-  const processSuccessfulResponse = useCallback(async (response, id) => {
-    const contentType = response.headers.get('content-type');
-    
-    if (contentType?.includes('application/pdf')) {
-      await handlePdfDownload(response, id);
-    } else if (contentType?.includes('application/json')) {
-      await handleJsonResponse(response);
-    } else {
-      Toast.error("Format response tidak dikenali.");
-    }
-  }, [handlePdfDownload, handleJsonResponse]);
+  const processSuccessfulResponse = useCallback(
+    async (response, id) => {
+      const contentType = response.headers.get("content-type");
+
+      if (contentType?.includes("application/pdf")) {
+        await handlePdfDownload(response, id);
+      } else if (contentType?.includes("application/json")) {
+        await handleJsonResponse(response);
+      } else {
+        Toast.error("Format response tidak dikenali.");
+      }
+    },
+    [handlePdfDownload, handleJsonResponse]
+  );
 
   const handleDownloadSK = async (id) => {
     try {
       const username = userData?.nama || userData?.username || "";
       const role = determineDownloadRole();
 
-      if (!validateDownloadPrerequisites(username, role)) {
-        return;
-      }
+      if (!validateDownloadPrerequisites(username, role)) return;
 
-      const params = new URLSearchParams({
-        username: username,
-        role: role
-      });
-
+      const params = new URLSearchParams({ username: username, role: role });
       const downloadUrl = `${API_LINK}CutiAkademik/DownloadPdf/${encodeURIComponent(id)}?${params.toString()}`;
-      
+
       const response = await fetch(downloadUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/pdf, application/json'
-        }
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/pdf, application/json" },
       });
 
       if (!response.ok) {
@@ -1502,27 +1395,24 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
       }
 
       await processSuccessfulResponse(response, id);
-
     } catch (error) {
       Toast.error(`Gagal download SK: ${error.message}`);
     }
   };
 
-  
   // Setup global function for print button (run once)
   useEffect(() => {
     globalThis.handlePrintSK = (id) => {
       handlePrint(id);
     };
-
-    // Cleanup on unmount
     return () => {
       delete globalThis.handlePrintSK;
     };
-  }, []); // Empty dependency array - run only once
+  }, []);
 
+  // Main data loading useEffect
   useEffect(() => {
-    if (!isClient) return;
+    setIsClient(true);
 
     if (!ssoData) {
       Toast.error("Sesi habis. Silakan login kembali.");
@@ -1532,24 +1422,94 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
 
     if (!userData) return;
 
-    if (roleId === "ROL71") {
-      if (prodiKonsentrasi !== null && !loadingProdiKonsentrasi) {
-        loadData(1);       
-        setShowRiwayat(true);
-        setTimeout(() => loadDataRiwayat(1), 50);
-      }
-    } else {
-      loadData(1);
-      if (roleId === "ROL999" || roleId === "ROL01" || roleId === "ROL74") {
-        setShowRiwayat(true);
-        setTimeout(() => loadDataRiwayat(1), 50);
-      }
+    const timer = setTimeout(() => setPageLoading(false), 200);
+
+    // ROL23: check bebas tanggungan
+    if (roleId === "ROL23") {
+      const checkBebasTanggungan = async () => {
+        try {
+          const userId = userData?.nama || userData?.mhsId || userData?.userid || userData?.username || "";
+          if (!userId) return;
+
+          const response = await fetch(`${API_LINK}CutiAkademik/CheckBebasTanggungan?userId=${userId}`, {
+            method: "GET",
+            headers: getAuthHeaders(),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            setBebasTanggunganStatus(data.status);
+          }
+        } catch {
+          setBebasTanggunganStatus(null);
+        }
+      };
+      checkBebasTanggungan();
     }
-  }, [isClient, ssoData, userData, loadData, loadDataRiwayat, roleId, router, prodiKonsentrasi, loadingProdiKonsentrasi]);
+
+    // ROL71: load prodi konsentrasi then load data
+    if (roleId === "ROL71") {
+      const loadProdiKonsentrasi = async () => {
+        try {
+          setLoadingProdiKonsentrasi(true);
+          const username = userData?.nama || userData?.username || "";
+          if (!username) return;
+
+          const response = await fetch(`${API_LINK}CutiAkademik/GetKonsentrasiBySekprod?username=${username}`, {
+            method: "GET",
+            headers: getAuthHeaders(),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.length > 0) {
+              const konsentrasiName = data[0].nama || "";
+              const cleanName = konsentrasiName.replace(/\s*\([^)]*\)\s*$/, "").trim();
+              setProdiKonsentrasi(cleanName);
+            }
+          }
+        } catch {
+          setProdiKonsentrasi(null);
+        } finally {
+          setLoadingProdiKonsentrasi(false);
+        }
+      };
+      loadProdiKonsentrasi();
+      return () => clearTimeout(timer);
+    }
+
+    if (hasLoadedRef.current) return () => clearTimeout(timer);
+
+    hasLoadedRef.current = true;
+
+    loadData(1);
+    if (roleId === "ROL999" || roleId === "ROL01" || roleId === "ROL74") {
+      setShowRiwayat(true);
+      setTimeout(() => loadDataRiwayat(1), 50);
+    }
+
+    return () => clearTimeout(timer);
+  }, [ssoData, userData, roleId, router, loadData, loadDataRiwayat]);
+
+  // ROL71: load data after prodiKonsentrasi is resolved
+  useEffect(() => {
+    if (roleId !== "ROL71") return;
+    if (loadingProdiKonsentrasi) return;
+    if (prodiKonsentrasi === null) return;
+    if (hasLoadedRef.current) return;
+
+    hasLoadedRef.current = true;
+
+    loadData(1);
+    setShowRiwayat(true);
+    setTimeout(() => loadDataRiwayat(1), 50);
+  }, [roleId, loadingProdiKonsentrasi, prodiKonsentrasi, loadData, loadDataRiwayat]);
 
   const getEmptyStateMessage = useCallback(() => {
-    if (roleId === "ROL23") return "Anda belum memiliki pengajuan cuti akademik. Klik tombol 'Ajukan Cuti Akademik' untuk membuat pengajuan baru.";
-    if (roleId === "ROL71") return "Tidak ada pengajuan cuti akademik. Anda dapat membuat pengajuan untuk mahasiswa dengan klik tombol 'Ajukan Cuti untuk Mahasiswa'.";
+    if (roleId === "ROL23")
+      return "Anda belum memiliki pengajuan cuti akademik. Klik tombol 'Ajukan Cuti Akademik' untuk membuat pengajuan baru.";
+    if (roleId === "ROL71")
+      return "Tidak ada pengajuan cuti akademik. Anda dapat membuat pengajuan untuk mahasiswa dengan klik tombol 'Ajukan Cuti untuk Mahasiswa'.";
     return "Tidak ada pengajuan cuti akademik yang perlu ditinjau saat ini.";
   }, [roleId]);
 
@@ -1557,8 +1517,8 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
     return bebasTanggunganStatus === "OK";
   }, [bebasTanggunganStatus]);
 
-  const getUploadButtonText = useCallback((uploadLoading) => {
-    if (uploadLoading) {
+  const getUploadButtonText = useCallback((isUploading) => {
+    if (isUploading) {
       return (
         <>
           <span className="spinner-border spinner-border-sm me-2"></span>
@@ -1566,334 +1526,320 @@ export default function Page_Administrasi_Pengajuan_Cuti_Akademik() {
         </>
       );
     }
-    return 'Upload SK';
+    return "Upload SK";
   }, []);
 
-  const filterContentRiwayat = (
-    <>
-      <DropDown
-        ref={sortRef}
-        arrData={dataFilterSort}
-        type="pilih"
-        label="Urutkan"
-        forInput="sortBy"
-        defaultValue={sortBy}
-      />
-      <DropDown
-        ref={prodiRef}
-        arrData={dataFilterProdi}
-        type="pilih"
-        label="Prodi"
-        forInput="filterProdi"
-        defaultValue={filterProdi}
-      />
-    </>
+  const filterContentRiwayat = useMemo(
+    () => (
+      <>
+        <DropDown
+          ref={sortRef}
+          arrData={DATA_FILTER_SORT}
+          type="pilih"
+          label="Urutkan"
+          forInput="sortBy"
+          defaultValue={sortBy}
+          isDisabled={manualLoading}
+        />
+        <DropDown
+          ref={prodiRef}
+          arrData={DATA_FILTER_PRODI}
+          type="pilih"
+          label="Prodi"
+          forInput="filterProdi"
+          defaultValue={filterProdi}
+          isDisabled={manualLoading}
+        />
+      </>
+    ),
+    [sortBy, filterProdi, manualLoading]
   );
 
-  // Prevent hydration mismatch
-  if (!isClient) {
-    return null;
-  }
-
   return (
-    <MainContent
-      layout="Admin"
-      loading={loading}
-      title="Daftar Pengajuan Cuti Akademik"
-      breadcrumb={[
-        { label: "Sistem Informasi Akademik" },
-        { label: "Administrasi Akademik" },
-        { label: "Cuti Akademik" },
-      ]}
-    >
+    <>
+      <Loading loading={manualLoading || pageLoading} message="Memuat data..." />
 
+      <MainContent
+        layout="Admin"
+        loading={false}
+        title="Daftar Pengajuan Cuti Akademik"
+        breadcrumb={BREADCRUMB_ITEMS}
+      >
+        <div className="mb-4">
+          <h5>Daftar Pengajuan Cuti Akademik</h5>
 
-
-
-      
-      <div className="mb-4">
-        <h5>Daftar Pengajuan Cuti Akademik</h5>
-        
-        {/* Notifikasi Bebas Tanggungan untuk Mahasiswa */}
-        {roleId === "ROL23" && bebasTanggunganStatus === "NOK" && (
-          <div className="mb-3">
-            <div className="alert alert-warning mb-2" role="alert">
-              <i className="fas fa-exclamation-triangle me-2"></i>
-              <strong>Anda belum menyelesaikan administrasi bebas tanggungan</strong>
+          {/* Notifikasi Bebas Tanggungan untuk Mahasiswa */}
+          {roleId === "ROL23" && bebasTanggunganStatus === "NOK" && (
+            <div className="mb-3">
+              <div className="alert alert-warning mb-2" role="alert">
+                <i className="fas fa-exclamation-triangle me-2"></i>
+                <strong>Anda belum menyelesaikan administrasi bebas tanggungan</strong>
+              </div>
+              <button
+                type="button"
+                className="btn btn-link p-0 text-primary text-decoration-underline"
+                style={{ cursor: "pointer" }}
+                onClick={() => router.push("/pages/administrasi-akademik/bebas-tanggungan")}
+              >
+                <i className="fas fa-eye me-1"></i>
+                {" "}Lihat Administrasi Bebas Tanggungan
+              </button>
             </div>
-            <button 
-              type="button"
-              className="btn btn-link p-0 text-primary text-decoration-underline" 
-              style={{ cursor: 'pointer' }}
-              onClick={() => router.push('/pages/administrasi-akademik/bebas-tanggungan')}
-            >
-              <i className="fas fa-eye me-1"></i>
-              {" "}Lihat Administrasi Bebas Tanggungan
-            </button>
-          </div>
-        )}
-        
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          {(roleId === "ROL23" || roleId === "ROL71") && (
-            <>
-              {roleId === "ROL23" ? (
-                shouldShowMahasiswaAddButton() && isClient && permissionData?.includes("cuti_akademik.create") && (
-                  <Button classType="primary" label="+ Tambah" onClick={handleAdd} />
-                )
-              ) : (
-                isClient && permissionData?.includes("cuti_akademik.create") && (
-                  <Button classType="primary" label="+ Tambah" onClick={handleAdd} />
-                )
-              )}
-            </>
           )}
-          <div></div>
-        </div>
 
-        {(() => {
-          const hasData = dataCutiAkademik.length > 0;
-          
-          if (hasData) {
-            return (
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            {(roleId === "ROL23" || roleId === "ROL71") && (
               <>
-                <Table
-                  data={dataCutiAkademik}
-                  onDetail={handleDetail}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                  onSent={handleAjukan}
-                  onApprove={handleApprove}
-                  onReject={handleReject}
-                  onUpload={handleUpload}
-                  onPrint={handlePrint}
-                  onDownloadSK={handleDownloadSK}
-                  config={{
-                    statusBadgeMap: {
-                      // Belum Disetujui statuses - use Diproses styling (warning)
-                      "Belum Disetujui Wadir 1": "bg-warning-subtle text-warning",
-                      "Belum Disetujui Finance": "bg-warning-subtle text-warning", 
-                      "Belum Disetujui Prodi": "bg-warning-subtle text-warning",
-                      // Ditolak statuses - use Ditolak styling (danger)
-                      "Ditolak wadir1": "bg-danger-subtle text-danger",
-                      "Ditolak prodi": "bg-danger-subtle text-danger",
-                      "Ditolak finance": "bg-danger-subtle text-danger",
-                      // Additional status variations
-                      "Menunggu Upload SK": "bg-warning-subtle text-warning",
-                    }
-                  }}
-                />
-
-                {totalData > 0 && (
-                  <Paging
-                    pageSize={pageSize}
-                    pageCurrent={currentPage}
-                    totalData={totalData}
-                    navigation={handleNavigation}
-                  />
+                {roleId === "ROL23" ? (
+                  shouldShowMahasiswaAddButton() &&
+                  isClient &&
+                  permissionData?.includes("cuti_akademik.create") && (
+                    <Button classType="primary" label="+ Tambah" onClick={handleAdd} />
+                  )
+                ) : (
+                  isClient &&
+                  permissionData?.includes("cuti_akademik.create") && (
+                    <Button classType="primary" label="+ Tambah" onClick={handleAdd} />
+                  )
                 )}
               </>
-            );
-          } else {
-            return (
-              <div className="text-center py-5">
-                <div className="mb-3">
-                  <i className="fas fa-inbox fa-3x text-muted"></i>
-                </div>
-                <h5 className="text-muted">Tidak ada data pengajuan</h5>
-                <p className="text-muted">
-                  {getEmptyStateMessage()}
-                </p>
-              </div>
-            );
-          }
-        })()}
-      </div>
-
-      
-      {showRiwayat && (
-        <div className="mt-5">
-          <h5>Daftar Riwayat Cuti Akademik</h5>
-          
-          <Formsearch
-            onSearch={handleSearchRiwayat}
-            onFilter={handleFilterApplyRiwayat}
-            onExport={async () => {
-              const params = new URLSearchParams();
-              if (searchRiwayat && searchRiwayat.trim() !== "") {
-                params.append('search', searchRiwayat.trim());
-              }
-              if (roleId !== "ROL74" && userData?.username) {
-                const userIdentifier = roleId === "ROL23"
-                  ? (userData?.mhsId || userData?.nama || userData?.username)
-                  : userData?.username;
-                params.append('userId', userIdentifier);
-              }
-              
-              if (roleId === "ROL71" && prodiKonsentrasi) {
-                const cleanKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, '').trim();
-                params.append('konsentrasi', cleanKonsentrasi);
-              }
-              
-              try {
-                const queryString = params.toString();
-                const exportUrl = `${API_LINK}CutiAkademik/ExportRiwayatCutiAkademikToExcel${queryString ? '?' + queryString : ''}`;
-                
-                const response = await fetch(exportUrl, {
-                  method: 'GET',
-                  headers: getAuthHeaders()
-                });
-
-                if (!response.ok) {
-                  throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const blob = await response.blob();
-                const url = globalThis.URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `Riwayat_Cuti_Akademik_${new Date().toISOString().split('T')[0]}.xlsx`;
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                globalThis.URL.revokeObjectURL(url);
-                
-                Toast.success("File Excel berhasil didownload!");
-              } catch (error) {
-                Toast.error(`Gagal export Excel: ${error.message}`);
-              }
-            }}
-            searchPlaceholder=""
-            showAddButton={false}
-            showFilterButton={true}
-            showExportButton={true}
-            exportButtonText="Unduh Excel"
-            filterContent={filterContentRiwayat}
-          />
+            )}
+            <div></div>
+          </div>
 
           {(() => {
-            const hasRiwayatData = dataRiwayat.length > 0;
-            
-            if (hasRiwayatData) {
-              return (
-                <>
-                  <Table
-                    data={dataRiwayat}
-                    onDetail={handleDetail}
-                    onPrint={handlePrint}
-                    config={{
-                      statusBadgeMap: {
-                        // Belum Disetujui statuses - use Diproses styling (warning)
-                        "Belum Disetujui Wadir 1": "bg-warning-subtle text-warning",
-                        "Belum Disetujui Finance": "bg-warning-subtle text-warning", 
-                        "Belum Disetujui Prodi": "bg-warning-subtle text-warning",
-                        // Ditolak statuses - use Ditolak styling (danger)
-                        "Ditolak wadir1": "bg-danger-subtle text-danger",
-                        "Ditolak prodi": "bg-danger-subtle text-danger",
-                        "Ditolak finance": "bg-danger-subtle text-danger",
-                        // Additional status variations
-                        "Menunggu Upload SK": "bg-warning-subtle text-warning",
-                      }
-                    }}
-                  />
+            const hasData = dataCutiAkademik.length > 0;
 
-                  {totalDataRiwayat > 0 && (
-                    <Paging
-                      pageSize={pageSize}
-                      pageCurrent={currentPageRiwayat}
-                      totalData={totalDataRiwayat}
-                      navigation={handleNavigationRiwayat}
+            if (hasData) {
+              return (
+                <div className="row">
+                  <div className="col-12">
+                    <Table
+                      data={dataCutiAkademik}
+                      onDetail={handleDetail}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                      onSent={handleAjukan}
+                      onApprove={handleApprove}
+                      onReject={handleReject}
+                      onUpload={handleUpload}
+                      onPrint={handlePrint}
+                      onDownloadSK={handleDownloadSK}
+                      config={{
+                        statusBadgeMap: {
+                          "Belum Disetujui Wadir 1": "bg-warning-subtle text-warning",
+                          "Belum Disetujui Finance": "bg-warning-subtle text-warning",
+                          "Belum Disetujui Prodi": "bg-warning-subtle text-warning",
+                          "Ditolak wadir1": "bg-danger-subtle text-danger",
+                          "Ditolak prodi": "bg-danger-subtle text-danger",
+                          "Ditolak finance": "bg-danger-subtle text-danger",
+                          "Menunggu Upload SK": "bg-warning-subtle text-warning",
+                        },
+                      }}
                     />
-                  )}
-                </>
+
+                    {totalData > 0 && !manualLoading && (
+                      <Paging
+                        pageSize={pageSize}
+                        pageCurrent={currentPage}
+                        totalData={totalData}
+                        navigation={handleNavigation}
+                      />
+                    )}
+                  </div>
+                </div>
               );
             } else {
               return (
                 <div className="text-center py-5">
                   <div className="mb-3">
-                    <i className="fas fa-history fa-3x text-muted"></i>
+                    <i className="fas fa-inbox fa-3x text-muted"></i>
                   </div>
-                  <h5 className="text-muted">Tidak ada data riwayat</h5>
+                  <h5 className="text-muted">Tidak ada data pengajuan</h5>
+                  <p className="text-muted">{getEmptyStateMessage()}</p>
                 </div>
               );
             }
           })()}
         </div>
-      )}
 
-      {/* SK Upload Modal */}
-      {showUploadModal && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-lg">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Upload SK Cuti Akademik</h5>
-                <button 
-                  type="button" 
-                  className="btn-close" 
-                  onClick={handleUploadCancel}
-                  disabled={uploadLoading}
-                ></button>
-              </div>
-              <div className="modal-body">
-                <div className="mb-3">
-                  <Label
-                    text="File Surat Keterangan"
-                    htmlFor="skFile"
-                    required={true}
-                  />
-                  <input
-                    type="file"
-                    id="skFile"
-                    className="form-control rounded-4 blue-element"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={handleSKFileSelect}
-                    disabled={uploadLoading}
-                  />
-                  <small className="text-muted">
-                    Format yang didukung: PDF, JPG, JPEG, PNG (Maksimal 10MB)
-                  </small>
-                </div>
+        {showRiwayat && (
+          <div className="mt-5">
+            <h5>Daftar Riwayat Cuti Akademik</h5>
 
-                {skFilePreview && (
-                  <div className="mb-3">
-                    <Label
-                      text="Preview SK:"
-                      htmlFor="skPreview"
-                    />
-                    <div className="text-center">
-                      <img 
-                        src={skFilePreview} 
-                        alt="Preview SK" 
-                        className="img-fluid" 
-                        style={{ maxHeight: '300px', border: '1px solid #ddd', borderRadius: '4px' }}
+            <Formsearch
+              onSearch={handleSearchRiwayat}
+              onFilter={handleFilterApplyRiwayat}
+              onExport={async () => {
+                const params = new URLSearchParams();
+                if (searchRiwayat && searchRiwayat.trim() !== "") {
+                  params.append("search", searchRiwayat.trim());
+                }
+                if (roleId !== "ROL74" && userData?.username) {
+                  const userIdentifier =
+                    roleId === "ROL23"
+                      ? userData?.mhsId || userData?.nama || userData?.username
+                      : userData?.username;
+                  params.append("userId", userIdentifier);
+                }
+
+                if (roleId === "ROL71" && prodiKonsentrasi) {
+                  const cleanKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, "").trim();
+                  params.append("konsentrasi", cleanKonsentrasi);
+                }
+
+                try {
+                  const queryString = params.toString();
+                  const exportUrl = `${API_LINK}CutiAkademik/ExportRiwayatCutiAkademikToExcel${queryString ? "?" + queryString : ""}`;
+
+                  const response = await fetch(exportUrl, {
+                    method: "GET",
+                    headers: getAuthHeaders(),
+                  });
+
+                  if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                  }
+
+                  const blob = await response.blob();
+                  const url = globalThis.URL.createObjectURL(blob);
+                  const link = document.createElement("a");
+                  link.href = url;
+                  link.download = `Riwayat_Cuti_Akademik_${new Date().toISOString().split("T")[0]}.xlsx`;
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                  globalThis.URL.revokeObjectURL(url);
+
+                  Toast.success("File Excel berhasil didownload!");
+                } catch (error) {
+                  Toast.error(`Gagal export Excel: ${error.message}`);
+                }
+              }}
+              searchPlaceholder=""
+              showAddButton={false}
+              showFilterButton={true}
+              showExportButton={true}
+              exportButtonText="Unduh Excel"
+              filterContent={filterContentRiwayat}
+            />
+
+            {(() => {
+              const hasRiwayatData = dataRiwayat.length > 0;
+
+              if (hasRiwayatData) {
+                return (
+                  <div className="row">
+                    <div className="col-12">
+                      <Table
+                        data={dataRiwayat}
+                        onDetail={handleDetail}
+                        onPrint={handlePrint}
+                        config={{
+                          statusBadgeMap: {
+                            "Belum Disetujui Wadir 1": "bg-warning-subtle text-warning",
+                            "Belum Disetujui Finance": "bg-warning-subtle text-warning",
+                            "Belum Disetujui Prodi": "bg-warning-subtle text-warning",
+                            "Ditolak wadir1": "bg-danger-subtle text-danger",
+                            "Ditolak prodi": "bg-danger-subtle text-danger",
+                            "Ditolak finance": "bg-danger-subtle text-danger",
+                            "Menunggu Upload SK": "bg-warning-subtle text-warning",
+                          },
+                        }}
                       />
+
+                      {totalDataRiwayat > 0 && !manualLoading && (
+                        <Paging
+                          pageSize={pageSize}
+                          pageCurrent={currentPageRiwayat}
+                          totalData={totalDataRiwayat}
+                          navigation={handleNavigationRiwayat}
+                        />
+                      )}
                     </div>
                   </div>
-                )}
-              </div>
-              <div className="modal-footer">
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  onClick={handleUploadCancel}
-                  disabled={uploadLoading}
-                >
-                  Batal
-                </button>
-                <button 
-                  type="button" 
-                  className="btn btn-primary" 
-                  onClick={handleUploadConfirm}
-                  disabled={!selectedSKFile || uploadLoading}
-                >
-                  {getUploadButtonText(uploadLoading)}
-                </button>
+                );
+              } else {
+                return (
+                  <div className="text-center py-5">
+                    <div className="mb-3">
+                      <i className="fas fa-history fa-3x text-muted"></i>
+                    </div>
+                    <h5 className="text-muted">Tidak ada data riwayat</h5>
+                  </div>
+                );
+              }
+            })()}
+          </div>
+        )}
+
+        {/* SK Upload Modal */}
+        {showUploadModal && (
+          <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+            <div className="modal-dialog modal-lg">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">Upload SK Cuti Akademik</h5>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={handleUploadCancel}
+                    disabled={uploadLoading}
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  <div className="mb-3">
+                    <Label text="File Surat Keterangan" htmlFor="skFile" required={true} />
+                    <input
+                      type="file"
+                      id="skFile"
+                      className="form-control rounded-4 blue-element"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={handleSKFileSelect}
+                      disabled={uploadLoading}
+                    />
+                    <small className="text-muted">
+                      Format yang didukung: PDF, JPG, JPEG, PNG (Maksimal 10MB)
+                    </small>
+                  </div>
+
+                  {skFilePreview && (
+                    <div className="mb-3">
+                      <Label text="Preview SK:" htmlFor="skPreview" />
+                      <div className="text-center">
+                        <img
+                          src={skFilePreview}
+                          alt="Preview SK"
+                          className="img-fluid"
+                          style={{ maxHeight: "300px", border: "1px solid #ddd", borderRadius: "4px" }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={handleUploadCancel}
+                    disabled={uploadLoading}
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleUploadConfirm}
+                    disabled={!selectedSKFile || uploadLoading}
+                  >
+                    {getUploadButtonText(uploadLoading)}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </MainContent>
+        )}
+      </MainContent>
+    </>
   );
 }
-//s

@@ -16,6 +16,7 @@ import { API_LINK } from "@/lib/constant";
 import { encryptIdUrl } from "@/lib/encryptor";
 import SweetAlert from "@/components/common/SweetAlert";
 import Cookies from "js-cookie";
+import fetchData from "@/lib/fetch";
 
 const BREADCRUMB_ITEMS = [
   { label: "Sistem Informasi Akademik" },
@@ -43,22 +44,6 @@ const DATA_FILTER_PRODI = [
   { Value: "Teknologi Rekayasa Pemeliharaan Alat Berat", Text: "Teknologi Rekayasa Pemeliharaan Alat Berat" },
   { Value: "Teknologi Rekayasa Perangkat Lunak", Text: "Teknologi Rekayasa Perangkat Lunak" },
 ];
-
-const getAuthHeaders = () => {
-  const token = Cookies.get("jwtToken");
-  return {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-    ...(token && { Authorization: `Bearer ${token}` }),
-  };
-};
-
-const getAuthHeadersForFormData = () => {
-  const token = Cookies.get("jwtToken");
-  return {
-    ...(token && { Authorization: `Bearer ${token}` }),
-  };
-};
 
 export default function MeninggalDuniaPage() {
   const ssoData = useMemo(() => getSSOData(), []);
@@ -498,18 +483,9 @@ export default function MeninggalDuniaPage() {
         const backendRole = userData?.roleId || "";
         if (backendRole) params.append("role", backendRole);
 
-        const url = `${API_LINK}MeninggalDunia/GetAllMeninggalDunia?${params}`;
-        const response = await fetch(url, { method: "GET", headers: getAuthHeaders() });
-
-        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-
-        const responseText = await response.text();
-        let data;
-        try {
-          data = JSON.parse(responseText);
-        } catch (parseError) {
-          throw new Error(`Invalid JSON response from server: ${parseError.message}`);
-        }
+        const paramsObj = Object.fromEntries(params.entries());
+        const data = await fetchData(`${API_LINK}MeninggalDunia/GetAllMeninggalDunia`, paramsObj, "GET");
+        if (data.error) throw new Error(data.message || "Gagal memuat data pengajuan");
 
         let actualData = extractArrayFromResponse(data);
         if (!Array.isArray(actualData)) {
@@ -586,23 +562,9 @@ export default function MeninggalDuniaPage() {
         params.append("PageNumber", page);
         params.append("PageSize", riwayatPageSize);
 
-        const url = `${API_LINK}MeninggalDunia/GetRiwayatMeninggalDunia?${params}`;
-        const response = await fetch(url, {
-          method: "GET",
-          headers: getAuthHeaders(),
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const responseText = await response.text();
-        let data;
-        try {
-          data = JSON.parse(responseText);
-        } catch (parseError) {
-          throw new Error(`Invalid JSON response from server: ${parseError.message}`);
-        }
+        const paramsObj = Object.fromEntries(params.entries());
+        const data = await fetchData(`${API_LINK}MeninggalDunia/GetRiwayatMeninggalDunia`, paramsObj, "GET");
+        if (data.error) throw new Error(data.message || "Gagal memuat data riwayat");
 
         let actualData = extractArrayFromResponse(data);
         if (!Array.isArray(actualData)) {
@@ -766,7 +728,7 @@ export default function MeninggalDuniaPage() {
 
       const response = await fetch(`${API_LINK}MeninggalDunia/UploadSKMeninggalDunia`, {
         method: "PUT",
-        headers: getAuthHeadersForFormData(),
+        headers: { Authorization: `Bearer ${Cookies.get("jwtToken")}` },
         body: formData,
       });
 
@@ -828,7 +790,7 @@ export default function MeninggalDuniaPage() {
 
       const response = await fetch(printUrl, {
         method: "GET",
-        headers: getAuthHeaders(),
+        headers: { Authorization: `Bearer ${Cookies.get("jwtToken")}` },
       });
 
       if (!response.ok) {
@@ -872,28 +834,8 @@ export default function MeninggalDuniaPage() {
 
       const downloadUrl = `${API_LINK}MeninggalDunia/DownloadFileMeninggalDunia/${encodeURIComponent(id)}?${params.toString()}`;
 
-      const checkParams = new URLSearchParams({
-        username: username,
-        format: "json",
-      });
-
-      const checkUrl = `${API_LINK}MeninggalDunia/GetDetailMeninggalDunia/${encodeURIComponent(id)}?${checkParams.toString()}`;
-
-      const checkResponse = await fetch(checkUrl, {
-        method: "GET",
-        headers: getAuthHeaders(),
-      });
-
-      if (!checkResponse.ok) {
-        if (checkResponse.status === 403) {
-          Toast.error("Anda tidak memiliki akses untuk download SK ini.");
-        } else {
-          Toast.error(`Gagal mengakses SK: HTTP ${checkResponse.status}`);
-        }
-        return;
-      }
-
-      const checkResult = await checkResponse.json();
+      const checkResult = await fetchData(`${API_LINK}MeninggalDunia/GetDetailMeninggalDunia/${encodeURIComponent(id)}`, { username, format: "json" }, "GET");
+      if (checkResult.error) { Toast.error("Gagal mengakses SK."); return; }
 
       if (!checkResult.canPrint) {
         Toast.error(checkResult.reason || "Tidak dapat download SK saat ini.");
@@ -921,35 +863,8 @@ export default function MeninggalDuniaPage() {
 
     try {
       const encodedId = encodeURIComponent(id);
-      const url = `${API_LINK}MeninggalDunia/FinalizeDraftMeninggalDunia/${encodedId}`;
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: getAuthHeaders(),
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-
-        try {
-          const errorData = JSON.parse(errorText);
-          const errorMsg = errorData.message || errorData.error || `HTTP ${res.status}: ${res.statusText}`;
-          Toast.error(`Gagal mengajukan: ${errorMsg}`);
-        } catch (parseError) {
-          if (parseError) { /* use fallback error message */ }
-          Toast.error(`HTTP ${res.status}: ${res.statusText}`);
-        }
-        return;
-      }
-
-      const raw = await res.text();
-      let result;
-      try {
-        result = JSON.parse(raw);
-      } catch (parseError) {
-        Toast.error(`Response server tidak valid: ${parseError.message}`);
-        return;
-      }
+      const result = await fetchData(`${API_LINK}MeninggalDunia/FinalizeDraftMeninggalDunia/${encodedId}`, {}, "POST");
+      if (result.error) { Toast.error(`Gagal mengajukan: ${result.message}`); return; }
 
       if (result?.message?.includes("Berhasil")) {
         Toast.success(result.message);
@@ -1002,17 +917,8 @@ export default function MeninggalDuniaPage() {
 
     try {
       const encodedId = encodeURIComponent(id);
-      const url = `${API_LINK}MeninggalDunia/DeleteMeninggalDunia/${encodedId}`;
-      const res = await fetch(url, {
-        method: "DELETE",
-        headers: getAuthHeaders(),
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      }
-
-      const data = await res.json();
+      const data = await fetchData(`${API_LINK}MeninggalDunia/DeleteMeninggalDunia/${encodedId}`, {}, "DELETE");
+      if (data.error) throw new Error(data.message || "Gagal menghapus pengajuan");
 
       if (data?.message?.includes("berhasil")) {
         Toast.success(data.message);
@@ -1050,27 +956,8 @@ export default function MeninggalDuniaPage() {
         role,
       };
       const encodedItemId = encodeURIComponent(itemId);
-      const url = `${API_LINK}MeninggalDunia/ApproveMeninggalDunia/${encodedItemId}`;
-
-      const res = await fetch(url, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-
-        try {
-          const errorData = JSON.parse(errorText);
-          const errorMsg = errorData.message || errorData.error || `HTTP ${res.status}`;
-          Toast.error(`Gagal menyetujui: ${errorMsg}`);
-        } catch (parseError) {
-          if (parseError) { /* use fallback error message */ }
-          Toast.error(`HTTP ${res.status}: ${res.statusText}`);
-        }
-        return;
-      }
+      const result = await fetchData(`${API_LINK}MeninggalDunia/ApproveMeninggalDunia/${encodedItemId}`, payload, "PUT");
+      if (result.error) { Toast.error(`Gagal menyetujui: ${result.message}`); return; }
 
       Toast.success("Pengajuan meninggal dunia berhasil disetujui!");
       loadPengajuan(1);
@@ -1100,41 +987,8 @@ export default function MeninggalDuniaPage() {
       };
 
       const encodedItemId = encodeURIComponent(itemId);
-      const url = `${API_LINK}MeninggalDunia/RejectMeninggalDunia/${encodedItemId}`;
-
-      const res = await fetch(url, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-
-        try {
-          const errorData = JSON.parse(errorText);
-          const errorMsg =
-            errorData.message ||
-            errorData.error ||
-            errorData.details ||
-            `HTTP ${res.status}: ${res.statusText}`;
-          Toast.error(`Gagal menolak pengajuan: ${errorMsg}`);
-        } catch (parseError) {
-          Toast.error(
-            `Gagal menolak pengajuan: HTTP ${res.status}\n\n${errorText} - Parse error: ${parseError.message}`
-          );
-        }
-        return;
-      }
-
-      const raw = await res.text();
-      let result;
-      try {
-        result = JSON.parse(raw);
-      } catch (parseError) {
-        Toast.error(`Response server tidak valid: ${parseError.message}\n\n${raw}`);
-        return;
-      }
+      const result = await fetchData(`${API_LINK}MeninggalDunia/RejectMeninggalDunia/${encodedItemId}`, payload, "PUT");
+      if (result.error) { Toast.error(`Gagal menolak: ${result.message}`); return; }
 
       if (result?.message?.includes("Berhasil")) {
         Toast.success(result.message);
@@ -1182,7 +1036,7 @@ export default function MeninggalDuniaPage() {
 
       const response = await fetch(exportUrl, {
         method: "GET",
-        headers: getAuthHeaders(),
+        headers: { Authorization: `Bearer ${Cookies.get("jwtToken")}` },
       });
 
       if (!response.ok) {
@@ -1235,18 +1089,11 @@ export default function MeninggalDuniaPage() {
 
           if (!username) return;
 
-          const response = await fetch(
-            `${API_LINK}MeninggalDunia/GetKonsentrasiBySekprod?username=${username}`,
-            { method: "GET", headers: getAuthHeaders() }
-          );
-
-          if (response.ok) {
-            const data = await response.json();
-            if (data && data.length > 0) {
-              const konsentrasiName = data[0].nama || "";
-              const cleanName = konsentrasiName.replaceAll(/\s*\([^)]*\)\s*$/g, "").trim();
-              setProdiKonsentrasi(cleanName);
-            }
+          const data = await fetchData(`${API_LINK}MeninggalDunia/GetKonsentrasiBySekprod`, { username }, "GET");
+          if (!data.error && data.length > 0) {
+            const konsentrasiName = data[0].nama || "";
+            const cleanName = konsentrasiName.replaceAll(/\s*\([^)]*\)\s*$/g, "").trim();
+            setProdiKonsentrasi(cleanName);
           }
         } catch {
           setProdiKonsentrasi(null);
@@ -1280,15 +1127,8 @@ export default function MeninggalDuniaPage() {
   useEffect(() => {
     const loadProgramStudiList = async () => {
       try {
-        const response = await fetch(
-          `${API_LINK}MeninggalDunia/GetProgramStudiListForMeninggalDunia`,
-          { method: "GET", headers: getAuthHeaders() }
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-
-          if (data && Array.isArray(data) && data.length > 0) {
+        const data = await fetchData(`${API_LINK}MeninggalDunia/GetProgramStudiListForMeninggalDunia`, {}, "GET");
+        if (!data.error && Array.isArray(data) && data.length > 0) {
             const mappedData = data
               .map((item) => {
                 const prodiName = item.proNama || "";
@@ -1300,7 +1140,6 @@ export default function MeninggalDuniaPage() {
 
             setDataFilterProdi(formattedData);
           }
-        }
       } catch (error) {
         console.error("Failed to load program studi list:", error);
       }

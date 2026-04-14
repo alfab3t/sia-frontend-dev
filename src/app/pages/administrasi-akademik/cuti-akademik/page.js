@@ -16,6 +16,7 @@ import { encryptIdUrl } from "@/lib/encryptor";
 import SweetAlert from "@/components/common/SweetAlert";
 import { getSSOData, getUserData } from "@/context/user";
 import Cookies from "js-cookie";
+import fetchData from "@/lib/fetch";
 
 
 const BREADCRUMB_ITEMS = [
@@ -43,15 +44,6 @@ const DATA_FILTER_PRODI = [
   { Value: "Teknologi Rekayasa Pemeliharaan Alat Berat", Text: "Teknologi Rekayasa Pemeliharaan Alat Berat" },
   { Value: "Teknologi Rekayasa Perangkat Lunak", Text: "Teknologi Rekayasa Perangkat Lunak" },
 ];
-
-const getAuthHeaders = () => {
-  const token = Cookies.get("jwtToken");
-  return {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-    ...(token && { Authorization: `Bearer ${token}` }),
-  };
-};
 
 export default function CutiAkademikPage() {
   const ssoData = useMemo(() => getSSOData(), []);
@@ -383,25 +375,9 @@ export default function CutiAkademikPage() {
   );
 
   const fetchMainData = useCallback(async (params) => {
-    const url = `${API_LINK}CutiAkademik/GetAllCutiAkademik?${params}`;
-
-    const [response] = await Promise.all([
-      fetch(url, { method: "GET", headers: getAuthHeaders() }),
-      new Promise((resolve) => setTimeout(resolve, 250)),
-    ]);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const responseText = await response.text();
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      throw new Error("Invalid JSON response from server");
-    }
-
+    const paramsObj = Object.fromEntries(params.entries());
+    const data = await fetchData(`${API_LINK}CutiAkademik/GetAllCutiAkademik`, paramsObj, "GET");
+    if (data.error) throw new Error(data.message || "Gagal memuat data");
     return data;
   }, []);
 
@@ -507,25 +483,9 @@ export default function CutiAkademikPage() {
   }, [roleId, userData, prodiKonsentrasi]);
 
   const fetchRiwayatData = useCallback(async (params) => {
-    const url = `${API_LINK}CutiAkademik/GetRiwayatCutiAkademik?${params}`;
-
-    const [response] = await Promise.all([
-      fetch(url, { method: "GET", headers: getAuthHeaders() }),
-      new Promise((resolve) => setTimeout(resolve, 250)),
-    ]);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const responseText = await response.text();
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      throw new Error("Invalid JSON response from server");
-    }
-
+    const paramsObj = Object.fromEntries(params.entries());
+    const data = await fetchData(`${API_LINK}CutiAkademik/GetRiwayatCutiAkademik`, paramsObj, "GET");
+    if (data.error) throw new Error(data.message || "Gagal memuat data riwayat");
     return data;
   }, []);
 
@@ -581,35 +541,25 @@ export default function CutiAkademikPage() {
   const fetchMissingData = useCallback(async (item, namaMahasiswa, prodi) => {
     if (!namaMahasiswa || !prodi || namaMahasiswa === "" || prodi === "") {
       try {
-        const detailUrl = `${API_LINK}CutiAkademik/GetDetailCutiAkademik?id=${item.id || item.cak_id}`;
-        const detailResponse = await fetch(detailUrl, { method: "GET", headers: getAuthHeaders() });
+        const detailData = await fetchData(
+          `${API_LINK}CutiAkademik/GetDetailCutiAkademik`,
+          { id: item.id || item.cak_id },
+          "GET"
+        );
 
-        if (detailResponse.ok) {
-          const detailData = await detailResponse.json();
-
+        if (!detailData.error) {
           if (!namaMahasiswa || namaMahasiswa === "") {
             namaMahasiswa =
-              detailData.mahasiswa ||
-              detailData.mhs_nama ||
-              detailData.namaMahasiswa ||
-              detailData.nama_mahasiswa ||
-              detailData.mahasiswaNama ||
-              detailData.nama ||
-              detailData.name ||
-              "-";
+              detailData.mahasiswa || detailData.mhs_nama || detailData.namaMahasiswa ||
+              detailData.nama_mahasiswa || detailData.mahasiswaNama ||
+              detailData.nama || detailData.name || "-";
           }
 
           if (!prodi || prodi === "") {
             prodi =
-              detailData.konsentrasi ||
-              detailData.prodiNama ||
-              detailData.konsentrasiSingkatan ||
-              detailData.kon_singkatan ||
-              detailData.prodi ||
-              detailData.programStudi ||
-              detailData.program_studi ||
-              detailData.jurusan ||
-              "-";
+              detailData.konsentrasi || detailData.prodiNama || detailData.konsentrasiSingkatan ||
+              detailData.kon_singkatan || detailData.prodi || detailData.programStudi ||
+              detailData.program_studi || detailData.jurusan || "-";
           }
         }
       } catch {
@@ -934,15 +884,12 @@ export default function CutiAkademikPage() {
     setManualLoading(true);
 
     try {
-      const url = `${API_LINK}CutiAkademik/DeleteCutiAkademik/${id}`;
-      const res = await fetch(url, { method: "DELETE", headers: getAuthHeaders() });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      }
-
-      const data = await res.json();
-
+      const data = await fetchData(
+        `${API_LINK}CutiAkademik/DeleteCutiAkademik/${id}`,
+        {},
+        "DELETE"
+      );
+      if (data.error) throw new Error(data.message || "Gagal menghapus pengajuan");
       if (data.message?.includes("berhasil")) {
         Toast.success(data.message);
         loadData(1);
@@ -974,27 +921,11 @@ export default function CutiAkademikPage() {
 
       const { payload, url } = buildSubmissionPayload(id, modifiedBy);
 
-      const res = await fetch(url, {
-        method: "PUT",
-        headers: { ...getAuthHeaders(), Accept: "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const raw = await res.text();
-
-      if (!res.ok) {
-        handleSubmissionError(res, raw);
+      const result = await fetchData(url, payload, "PUT");
+      if (result.error) {
+        handleSubmissionError({ status: result.status }, JSON.stringify(result));
         return;
       }
-
-      let result;
-      try {
-        result = JSON.parse(raw);
-      } catch {
-        Toast.error("Response server tidak valid. Periksa console untuk detail.");
-        return;
-      }
-
       handleSubmissionSuccess(result, id);
     } catch (err) {
       Toast.error(`Gagal mengajukan: ${err.message}`);
@@ -1039,31 +970,12 @@ export default function CutiAkademikPage() {
         return;
       }
 
-      const res = await fetch(url, {
-        method: "PUT",
-        headers: { ...getAuthHeaders(), Accept: "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const raw = await res.text();
-
-      if (!res.ok) {
-        try {
-          const errorData = JSON.parse(raw);
-          const errorMsg = errorData.message || errorData.error || `HTTP ${res.status}`;
-          Toast.error(`Gagal menyetujui: ${errorMsg}`);
-        } catch {
-          Toast.error(`HTTP ${res.status}: ${res.statusText}`);
-        }
+      const result = await fetchData(url, payload, "PUT");
+      if (result.error) {
+        const errorMsg = result.message || result.error || "Gagal menyetujui";
+        Toast.error(`Gagal menyetujui: ${errorMsg}`);
         return;
       }
-
-      try {
-        JSON.parse(raw);
-      } catch {
-        // ignore
-      }
-
       Toast.success("Pengajuan cuti akademik berhasil disetujui!");
       loadData(1);
     } catch (err) {
@@ -1081,31 +993,6 @@ export default function CutiAkademikPage() {
     }
     return username;
   }, [userData]);
-
-  const handleRejectionError = useCallback((res, errorText) => {
-    let errorMessage = `HTTP ${res.status}: ${res.statusText}`;
-
-    try {
-      const errorData = JSON.parse(errorText);
-
-      if (errorData.message) {
-        errorMessage = errorData.message;
-      } else if (errorData.error) {
-        errorMessage = errorData.error;
-      } else if (errorData.details) {
-        errorMessage = errorData.details;
-      }
-
-      if (errorData.errors) {
-        const validationErrors = Object.values(errorData.errors).flat();
-        errorMessage = validationErrors.join(", ");
-      }
-    } catch {
-      errorMessage = `${errorMessage}\n\nRaw response: ${errorText}`;
-    }
-
-    Toast.error(`Gagal menolak pengajuan: ${errorMessage}`);
-  }, []);
 
   const handleRejectionSuccess = useCallback(
     (result) => {
@@ -1149,39 +1036,14 @@ export default function CutiAkademikPage() {
       }
 
       const payload = { id: itemId, role: roleId, username: username };
-      const url = `${API_LINK}CutiAkademik/RejectCutiAkademik`;
 
-      const res = await fetch(url, {
-        method: "PUT",
-        headers: { ...getAuthHeaders(), Accept: "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        handleRejectionError(res, errorText);
+      const result = await fetchData(`${API_LINK}CutiAkademik/RejectCutiAkademik`, payload, "PUT");
+      if (result.error) {
+        const errorMsg = result.message || result.error || "Gagal menolak pengajuan";
+        Toast.error(`Gagal menolak pengajuan: ${errorMsg}`);
         setManualLoading(false);
         return;
       }
-
-      const responseText = await res.text();
-
-      let result;
-      try {
-        result = JSON.parse(responseText);
-      } catch {
-        if (res.status === 200) {
-          Toast.success("Pengajuan berhasil ditolak!");
-          loadData(1);
-          if (showRiwayat) loadDataRiwayat(1);
-          setManualLoading(false);
-          return;
-        }
-        Toast.error("Response server tidak valid. Periksa console untuk detail.");
-        setManualLoading(false);
-        return;
-      }
-
       handleRejectionSuccess(result);
     } catch (err) {
       Toast.error(`Gagal menolak pengajuan: ${err.message}`);
@@ -1430,16 +1292,8 @@ export default function CutiAkademikPage() {
         try {
           const userId = userData?.nama || userData?.mhsId || userData?.userid || userData?.username || "";
           if (!userId) return;
-
-          const response = await fetch(`${API_LINK}CutiAkademik/CheckBebasTanggungan?userId=${userId}`, {
-            method: "GET",
-            headers: getAuthHeaders(),
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            setBebasTanggunganStatus(data.status);
-          }
+          const data = await fetchData(`${API_LINK}CutiAkademik/CheckBebasTanggungan`, { userId }, "GET");
+          if (!data.error) setBebasTanggunganStatus(data.status);
         } catch {
           setBebasTanggunganStatus(null);
         }
@@ -1454,19 +1308,11 @@ export default function CutiAkademikPage() {
           setLoadingProdiKonsentrasi(true);
           const username = userData?.nama || userData?.username || "";
           if (!username) return;
-
-          const response = await fetch(`${API_LINK}CutiAkademik/GetKonsentrasiBySekprod?username=${username}`, {
-            method: "GET",
-            headers: getAuthHeaders(),
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            if (data && data.length > 0) {
-              const konsentrasiName = data[0].nama || "";
-              const cleanName = konsentrasiName.replace(/\s*\([^)]*\)\s*$/, "").trim();
-              setProdiKonsentrasi(cleanName);
-            }
+          const data = await fetchData(`${API_LINK}CutiAkademik/GetKonsentrasiBySekprod`, { username }, "GET");
+          if (!data.error && data.length > 0) {
+            const konsentrasiName = data[0].nama || "";
+            const cleanName = konsentrasiName.replace(/\s*\([^)]*\)\s*$/, "").trim();
+            setProdiKonsentrasi(cleanName);
           }
         } catch {
           setProdiKonsentrasi(null);
@@ -1694,7 +1540,7 @@ export default function CutiAkademikPage() {
 
                   const response = await fetch(exportUrl, {
                     method: "GET",
-                    headers: getAuthHeaders(),
+                    headers: { Authorization: `Bearer ${Cookies.get("jwtToken")}` },
                   });
 
                   if (!response.ok) {

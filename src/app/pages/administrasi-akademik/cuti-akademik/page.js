@@ -108,22 +108,23 @@ export default function CutiAkademikPage() {
 
   const filterProdiData = useCallback(
     (item, currentStatus) => {
-      const itemProdi = item.prodi || item.kon_nama || item.konsentrasi || "";
+      const itemProdi = item.Prodi || item.prodi || item.kon_nama || item.konsentrasi || "";
       const normalizeProdiName = (name) => {
         if (!name) return "";
         return name.replace(/\s*\([^)]*\)\s*$/, "").trim();
       };
 
       const normalizedItemProdi = normalizeProdiName(itemProdi);
-      const normalizedProdiKonsentrasi = normalizeProdiName(prodiKonsentrasi);
 
-      if (prodiKonsentrasi && normalizedItemProdi !== normalizedProdiKonsentrasi) {
-        return false;
+      if (prodiKonsentrasi && prodiKonsentrasi.length > 0) {
+        const matchesAny = prodiKonsentrasi.some(
+          (p) => normalizeProdiName(p) === normalizedItemProdi
+        );
+        if (!matchesAny) return false;
       }
 
       if (currentStatus === "Draft") {
-        const approveProdiValue = item.approveProdi || item.cak_approve_prodi || "";
-        return approveProdiValue !== "" && approveProdiValue;
+        return true;
       }
 
       return currentStatus === "Belum Disetujui Prodi" || currentStatus === "Belum Disetujui Wadir 1";
@@ -474,9 +475,11 @@ export default function CutiAkademikPage() {
       params.append("userId", userIdentifier);
     }
 
-    if (roleId === "ROL71" && prodiKonsentrasi) {
-      const cleanKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, "").trim();
-      params.append("konsentrasi", cleanKonsentrasi);
+    if (roleId === "ROL71" && prodiKonsentrasi && prodiKonsentrasi.length > 0) {
+      prodiKonsentrasi.forEach((p) => {
+        const clean = p.replace(/\s*\([^)]*\)\s*$/, "").trim();
+        if (clean) params.append("konsentrasi", clean);
+      });
     }
 
     return params;
@@ -733,12 +736,14 @@ export default function CutiAkademikPage() {
         const formattedDataPromises = completedData.map((item, index) => formatRiwayatItem(item, index));
         let allFormattedData = await Promise.all(formattedDataPromises);
 
-        if (roleId === "ROL71" && prodiKonsentrasi) {
-          const cleanProdiKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, "").trim();
+        if (roleId === "ROL71" && prodiKonsentrasi && prodiKonsentrasi.length > 0) {
+          const cleanProdiList = new Set(prodiKonsentrasi.map((p) =>
+            p.replace(/\s*\([^)]*\)\s*$/, "").trim()
+          ));
           allFormattedData = allFormattedData.filter((item) => {
             const itemProdi = String(item.Prodi || "").trim();
             const cleanItemProdi = itemProdi.replace(/\s*\([^)]*\)\s*$/, "").trim();
-            return cleanItemProdi === cleanProdiKonsentrasi;
+            return cleanProdiList.has(cleanItemProdi);
           });
         }
 
@@ -1310,9 +1315,10 @@ export default function CutiAkademikPage() {
           if (!username) return;
           const data = await fetchData(`${API_LINK}CutiAkademik/GetKonsentrasiBySekprod`, { username }, "GET");
           if (!data.error && data.length > 0) {
-            const konsentrasiName = data[0].nama || "";
-            const cleanName = konsentrasiName.replace(/\s*\([^)]*\)\s*$/, "").trim();
-            setProdiKonsentrasi(cleanName);
+            const cleanNames = data.map(item =>
+              (item.nama || "").replace(/\s*\([^)]*\)\s*$/, "").trim()
+            ).filter(n => n !== "");
+            setProdiKonsentrasi(cleanNames);
           }
         } catch {
           setProdiKonsentrasi(null);
@@ -1529,9 +1535,11 @@ export default function CutiAkademikPage() {
                   params.append("userId", userIdentifier);
                 }
 
-                if (roleId === "ROL71" && prodiKonsentrasi) {
-                  const cleanKonsentrasi = prodiKonsentrasi.replace(/\s*\([^)]*\)\s*$/, "").trim();
-                  params.append("konsentrasi", cleanKonsentrasi);
+                if (roleId === "ROL71" && prodiKonsentrasi && prodiKonsentrasi.length > 0) {
+                  prodiKonsentrasi.forEach((p) => {
+                    const clean = p.replace(/\s*\([^)]*\)\s*$/, "").trim();
+                    if (clean) params.append("konsentrasi", clean);
+                  });
                 }
 
                 try {
